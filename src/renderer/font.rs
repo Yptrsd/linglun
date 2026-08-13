@@ -22,13 +22,13 @@ use pdf_writer::{Name, Pdf, Rect, Ref, Str};
 /// 注意：U+E520–U+E526 是单个字母（p/m/f/r/s/z/n），
 /// 组合力度记号（pp/mp/mf/ff 等）在 U+E527–U+E53D。
 pub mod dynamics {
-    #[allow(dead_code)] pub const P: char = '\u{E520}';   // dynamicPiano
-    #[allow(dead_code)] pub const M: char = '\u{E521}';   // dynamicMezzo
-    #[allow(dead_code)] pub const F: char = '\u{E522}';   // dynamicForte
-    #[allow(dead_code)] pub const R: char = '\u{E523}';   // dynamicRinforzando
-    #[allow(dead_code)] pub const S: char = '\u{E524}';   // dynamicSforzando
-    #[allow(dead_code)] pub const Z: char = '\u{E525}';   // dynamicZ
-    #[allow(dead_code)] pub const N: char = '\u{E526}';   // dynamicNiente
+    pub const P: char = '\u{E520}';   // dynamicPiano
+    pub const M: char = '\u{E521}';   // dynamicMezzo
+    pub const F: char = '\u{E522}';   // dynamicForte
+    pub const R: char = '\u{E523}';   // dynamicRinforzando
+    pub const S: char = '\u{E524}';   // dynamicSforzando
+    pub const Z: char = '\u{E525}';   // dynamicZ
+    pub const N: char = '\u{E526}';   // dynamicNiente
     pub const PP:     char = '\u{E52B}';
     pub const MP:     char = '\u{E52C}';
     pub const MF:     char = '\u{E52D}';
@@ -56,7 +56,6 @@ pub mod time_sig {
     }
 }
 
-#[allow(dead_code)]
 pub const REPEAT_DOT: char = '\u{E044}';
 
 /// SMuFL Metronome marks 范围 (U+ECA0–U+ECBF)
@@ -133,8 +132,6 @@ pub fn dynamics_char(s: &str) -> Option<char> {
 pub struct CffFont {
     face: OwnedFace,
     cff_data: Vec<u8>,
-    #[allow(dead_code)]
-    units_per_em: u16,
     pub ascender: f32,
     pub descender: f32,
     pub bbox: Rect,
@@ -188,7 +185,6 @@ impl CffFont {
         Ok(Self {
             face,
             cff_data,
-            units_per_em,
             ascender,
             descender,
             bbox,

@@ -146,8 +146,6 @@ pub fn render_to_pdf(events: &[ScoreEvent], output_path: &str) -> Result<(), Str
         font_resources.push((em.name, em.id));
     }
 
-    let fallback = (fallback_font_name, fallback_font_id);
-
     // ============================================
     // 自适应行距：按每行内容的垂直占用分页，再页内均匀分配
     // ============================================
@@ -247,9 +245,6 @@ pub fn render_to_pdf(events: &[ScoreEvent], output_path: &str) -> Result<(), Str
 
     let buf = pdf.finish();
     std::fs::write(output_path, buf).map_err(|e| format!("写入 PDF 失败：{}", e))?;
-
-    // 避免未使用警告
-    let _ = fallback;
 
     Ok(())
 }
@@ -1165,17 +1160,6 @@ fn beam_bounds(
         }
     }
     (first_x, last_x)
-}
-
-#[allow(dead_code)]
-fn count_beam_notes(elements: &[BeamElement]) -> usize {
-    elements
-        .iter()
-        .map(|e| match e {
-            BeamElement::Note(_, _) => 1,
-            BeamElement::Nested(inner, _) => count_beam_notes(inner),
-        })
-        .sum()
 }
 
 // ============================================

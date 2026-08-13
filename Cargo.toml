@@ -4,14 +4,11 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-clap = "4.6.1"
 pest = "2.8.6"
 pest_derive = "2.8.6"
-svg = "0.18.0"
 
 # PDF 生成
 pdf-writer = "0.14.0"
 
 # 字体支持
-ab_glyph = "0.2.32"
 owned_ttf_parser = "0.25.0"
