@@ -4,10 +4,12 @@
 file = { SOI ~ (content ~ NEWLINE?)* ~ EOI }
 content = { 
     control |           // #开头的控制函数
+    barline |           // 小节线
     note |              // 音符
     chord |             // 花括号和弦
     tie |               // 圆括号连音线
     bracket |           // 方括号减时线
+    extend |            // 延长记号 -
     dot |               // 附点
     octave_change |     // 幂号八度变化
     whitespace | 
@@ -15,32 +17,52 @@ content = {
 }
 
 // ============================================
+// 小节线（顺序重要：长模式优先匹配）
+// ============================================
+barline = { 
+    "||:" |     // 反复开始
+    "|||" |     // 终止小节线
+    ":||" |     // 反复结束
+    "||" |      // 分段线
+    "|"         // 单小节线
+}
+
+// ============================================
+// 延长记号：延长一拍
+// ============================================
+extend = { "-" }
+
+// ============================================
 // 控制函数：#开头，尖括号传参
 // ============================================
 control = { "#" ~ ident ~ ("<" ~ param ~ ">")? }
-param = { (control | note | chord | tie | bracket | ident | number | punctuation | whitespace)* }
+param = { (control | note | chord | tie | bracket | barline | ident | number | punctuation | whitespace | unicode_char)* }
+
+// 任何非尖括号、非换行的 Unicode 字符（用于中文、音乐符号等）
+unicode_char = @{ !("<" | ">" | NEWLINE) ~ ANY }
 
 // ============================================
 // 音符：数字1-7，后面可跟修饰符
 // ============================================
 note = { 
     ASCII_DIGIT ~                    // 1-7
-    octave_modifier? ~               // 八度修饰符（^+1, ^-1, ^=）
+    octave_modifier? ~               // 八度修饰符（^+1, ^-1, ^=, ^ 单独→升1个八度）
     duration_modifier?               // 时值修饰符（后面可扩展）
 }
-octave_modifier = { "^" ~ ("+" | "-" | "=") ~ ASCII_DIGIT? }
+// 原子规则：内部不应用隐式 whitespace 跳过，避免 "5^- 6" 中 ^- 跨空格吃掉下一个数字
+octave_modifier = @{ "^" ~ (("+" | "-" | "=") ~ ASCII_DIGIT?)? }
 duration_modifier = { "." }          // 附点（单独处理）
 
 // ============================================
 // 幂号表达式：独立的八度变化指令
 // ============================================
-octave_change = { "^" ~ ("+" | "-" | "=") ~ ASCII_DIGIT? }
+octave_change = @{ "^" ~ (("+" | "-" | "=") ~ ASCII_DIGIT?)? }
 
 // ============================================
 // 方括号：减时线（支持嵌套）
 // ============================================
 bracket = { "[" ~ bracket_inner+ ~ "]" }
-bracket_inner = { bracket | note | chord | tie | dot | whitespace }
+bracket_inner = { bracket | note | chord | tie | dot | control | whitespace }
 
 // ============================================
 // 花括号：和弦（支持嵌套）
@@ -64,7 +86,7 @@ dot = { "." }
 // ============================================
 ident = { ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
 number = { ASCII_DIGIT+ }
-punctuation = { "," | ":" | ";" }
+punctuation = { "," | ":" | ";" | "/" }
 
 // ============================================
 // 空白和换行
