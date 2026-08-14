@@ -351,7 +351,16 @@ pub struct FontFamily {
 impl FontFamily {
     /// 加载系统字体并嵌入 PDF。失败时打印警告，返回 None。
     /// `extra_chars` 为乐谱中实际出现的文本字符，在嵌入前一并预热，确保宽度表完整。
-    pub fn load_and_embed(pdf: &mut Pdf, next_ref: &mut i32, extra_chars: &str) -> Self {
+    ///
+    /// `font_dirs`：可选的字体查找目录列表，按顺序在目录中匹配候选文件名后用
+    /// `CffFont::load` 加载；目录中都找不到时回退到内置的系统字体路径
+    /// （macOS 默认路径 / `/System/Library/Fonts` 等）。
+    pub fn load_and_embed(
+        pdf: &mut Pdf,
+        next_ref: &mut i32,
+        extra_chars: &str,
+        font_dirs: &[Option<std::path::PathBuf>],
+    ) -> Self {
         let mut me = Self {
             leland: None,
             latin_bold: None,
@@ -360,7 +369,7 @@ impl FontFamily {
         };
 
         // --- Leland ---
-        if let Ok(mut f) = CffFont::load("/Library/Fonts/Leland.otf", 0) {
+        if let Some(mut f) = find_and_load(font_dirs, "Leland.otf", 0) {
             f.set_symbolic(true);
             let smufl_chars = vec![
                 dynamics::PP, dynamics::P, dynamics::M, dynamics::F,
@@ -380,9 +389,7 @@ impl FontFamily {
         }
 
         // --- Source Serif Pro Bold（音符数字粗体） ---
-        if let Ok(mut f) = CffFont::load(
-            "/Users/pantaoran/Library/Fonts/SourceSerifPro-Bold.otf", 0,
-        ) {
+        if let Some(mut f) = find_and_load(font_dirs, "SourceSerifPro-Bold.otf", 0) {
             let common: Vec<char> = "0123456789+-=()<>[]{}/,:;.".chars().collect();
             let alpha: Vec<char> = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".chars().collect();
             f.prewarm(common.into_iter().chain(alpha).chain(extra_chars.chars()));
@@ -391,9 +398,7 @@ impl FontFamily {
         }
 
         // --- Source Serif Pro Regular（西文文本） ---
-        if let Ok(mut f) = CffFont::load(
-            "/Users/pantaoran/Library/Fonts/SourceSerifPro-Regular.otf", 0,
-        ) {
+        if let Some(mut f) = find_and_load(font_dirs, "SourceSerifPro-Regular.otf", 0) {
             let common: Vec<char> =
                 "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 =.,;:()[]{}<>/+-*&%$#@!?".chars().collect();
             let terms = "ModeratoAndanteAllegroAdagioLargoVivacePrestoLentoAllegrettoGraveAssaiConTenutoMarcatoStaccatoEspressivoSostenutoLegatoSforzandoRinforzandoCrescendoDiminuendo".chars();
@@ -403,9 +408,7 @@ impl FontFamily {
         }
 
         // --- Source Han Serif SC（简体中文/非西文），TTC 第 3 个字体 = SC ---
-        if let Ok(mut f) = CffFont::load(
-            "/Users/pantaoran/Library/Fonts/SourceHanSerif-Regular.ttc", 2,
-        ) {
+        if let Some(mut f) = find_and_load(font_dirs, "SourceHanSerif-Regular.ttc", 2) {
             let common = "调中快速慢板行广庄庄急渐强弱连断重保持延长记号分拍反复起始终止段落速度排号调式术语".chars();
             let terms = "ModeratoAdagioAllegroLargoVivace 快板慢板行板广板庄板急板渐快渐慢中速快速慢速稍快稍慢非常很有表情如歌的".chars();
             let keys = "CDEFGAB".chars();
@@ -418,8 +421,36 @@ impl FontFamily {
     }
 }
 
-// ============================================
-// 文本渲染辅助：按字符选择合适字体（西文→latin/latin_bold；非西文→cjk）
+/// 在用户指定的字体目录中查找 `file_name`，找不到时回退到内置的系统字体路径。
+/// 返回加载成功的 `CffFont`（未找到/加载失败返回 None）。
+fn find_and_load(
+    font_dirs: &[Option<std::path::PathBuf>],
+    file_name: &str,
+    face_index: u32,
+) -> Option<CffFont> {
+    // 1) 用户指定目录优先
+    for dir in font_dirs.iter().flatten() {
+        let path = dir.join(file_name);
+        if let Ok(f) = CffFont::load(path.to_str()?, face_index) {
+            return Some(f);
+        }
+    }
+    // 2) 回退：常见系统字体目录（macOS 默认 + 本机 Homebrew）
+    const FALLBACK_DIRS: &[&str] = &[
+        "/Users/pantaoran/Library/Fonts",
+        "/opt/homebrew/share/fonts",
+        "/usr/local/share/fonts",
+        "/Library/Fonts",
+        "/System/Library/Fonts",
+    ];
+    for dir in FALLBACK_DIRS {
+        let path = format!("{}/{}", dir, file_name);
+        if let Ok(f) = CffFont::load(&path, face_index) {
+            return Some(f);
+        }
+    }
+    None
+}
 // ============================================
 
 /// 字符类别：影响字体选择

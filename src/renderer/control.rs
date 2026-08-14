@@ -134,6 +134,14 @@ impl ControlFunc for TimesigFunc {
     fn width(&self, _value: &str) -> f32 {
         NOTE_GLYPH_WIDTH
     }
+    fn top_extent(&self) -> f32 {
+        // 分子渲染于 y_base + 0.35em，拍号数字字形上探 ≈ 0.25em
+        NOTE_FONT_SIZE * 0.6
+    }
+    fn bottom_extent(&self) -> f32 {
+        // 分母渲染于 y_base - 0.25em，字形下探 ≈ 0.25em
+        NOTE_FONT_SIZE * 0.5
+    }
     fn prewarm_chars(&self, value: &str) -> Vec<char> {
         if let Some((num, den)) = parse_timesig(value) {
             vec![time_sig::digit(num), time_sig::digit(den)]
@@ -202,7 +210,10 @@ impl ControlFunc for DynamicsFunc {
         dynamics_char(value).into_iter().collect()
     }
     fn bottom_extent(&self) -> f32 {
-        DYNAMICS_Y_OFFSET + NOTE_FONT_SIZE * 1.2
+        // 实测 Leland 力度字形（ff/fff 最深）y_min ≈ -196/1000em，渲染字号
+        // 18pt → 下探约 3.5pt；回退文本 descender 约 4.5pt，留 1.5pt 余量。
+        // 之前用 28 + 18 = 46 高估了 12pt，导致带力度的行行距虚大。
+        DYNAMICS_Y_OFFSET + 6.0
     }
     fn render(&self, ctx: &mut RenderCtx, value: &str, x: f32, y_base: f32) {
         let (content, fonts, fallback) = ctx.split();

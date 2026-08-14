@@ -29,7 +29,6 @@ const NOTE_SPACING: f32 = 25.0;
 const MIN_LINE_GAP: f32 = 8.0;
 /// 页内均匀分配时单个行间隙可额外增加的间距上限（避免行距过散）
 const MAX_EXTRA_PER_GAP: f32 = 30.0;
-
 // ============================================
 // 视觉元素尺寸
 // ============================================
@@ -75,6 +74,8 @@ const GRACE_GAP: f32 = 0.0;
 const GRACE_RAISE: f32 = 12.0;
 /// 装饰音弧线半径（小弧，围绕装饰音下方）
 const GRACE_ARC_RADIUS: f32 = 3.0;
+/// 装饰音圆弧与最下层内容（低八度点/减时线）之间的间隙
+const GRACE_ARC_GAP: f32 = 2.0;
 // 注：KEY_Y_OFFSET / TEMPO_Y_OFFSET / DYNAMICS_Y_OFFSET 已迁至 control.rs（仅控制函数渲染使用）
 /// 升降号视觉宽度（用于 layout 估算；渲染时用 bbox 实际值）
 /// SMuFL accidental 字形 advance/bbox 远小于常规字符，实际宽度约 0.24em
@@ -96,17 +97,25 @@ const CREDIT_FONT_SIZE: f32 = 12.0;
 /// 标题区各行之间的间距
 const TITLE_LINE_GAP: f32 = 4.0;
 /// 标题区底部与首行音符之间的间距
-const TITLE_AREA_GAP: f32 = 10.0;
+const TITLE_AREA_GAP: f32 = 50.0;
 
 /// 将乐谱事件渲染为 PDF 文件。
-pub fn render_to_pdf(events: &[ScoreEvent], output_path: &str) -> Result<(), String> {
+/// `font_dirs`：可选的字体查找目录，传给字体模块以替代内置的系统字体路径。
+/// 错误与警告记录到 `diag`（如无事件、字体缺失回退），不再直接中断。
+pub fn render_to_pdf(
+    events: &[ScoreEvent],
+    output_path: &str,
+    font_dirs: &[Option<std::path::PathBuf>],
+    diag: &mut crate::diagnostics::Diagnostics,
+) -> Result<(), String> {
     // 提取页面元数据（#title/#subtitle/#credit），不参与音符行内布局
     let (meta, note_events) = extract_page_meta(events);
     let title_area = title_area_height(&meta);
 
     let lines = layout_lines(&note_events);
     if lines.is_empty() {
-        return Err("没有可渲染的事件".to_string());
+        diag.error("没有可渲染的事件");
+        return Ok(());
     }
 
     let mut pdf = Pdf::new();
@@ -128,7 +137,21 @@ pub fn render_to_pdf(events: &[ScoreEvent], output_path: &str) -> Result<(), Str
     let extra_chars = collect_extra_chars(events);
 
     // 加载并嵌入 FontFamily（Leland + Source Serif Pro 系列 + 思源宋体）
-    let mut fonts = FontFamily::load_and_embed(&mut pdf, &mut next_ref, &extra_chars);
+    let mut fonts = FontFamily::load_and_embed(&mut pdf, &mut next_ref, &extra_chars, font_dirs);
+
+    // 字体缺失警告（回退到 Helvetica，中文/音乐符号会显示异常）
+    if fonts.leland.is_none() {
+        diag.warn("未找到 Leland 字体：力度/拍号/升降号等 SMuFL 符号将无法渲染");
+    }
+    if fonts.latin_bold.is_none() {
+        diag.warn("未找到 Source Serif Pro Bold：音符数字回退到 Helvetica");
+    }
+    if fonts.latin.is_none() {
+        diag.warn("未找到 Source Serif Pro Regular：西文回退到 Helvetica");
+    }
+    if fonts.cjk.is_none() {
+        diag.warn("未找到思源宋体：中文文本将无法正确渲染");
+    }
 
     // 收集所有页面需要引用的字体资源（name → id）
     let mut font_resources: Vec<(Name<'static>, Ref)> = Vec::new();
@@ -152,6 +175,9 @@ pub fn render_to_pdf(events: &[ScoreEvent], output_path: &str) -> Result<(), Str
     // 每行相对 y_base 的垂直占用：(top, bottom)
     let extents: Vec<(f32, f32)> = lines.iter().map(|(line, _)| line_extents(line)).collect();
     let available = PAGE_HEIGHT - MARGIN_TOP - MARGIN_BOTTOM;
+    // 第一页顶部让出标题区，可用高度相应减少（否则首页会按整页高度分配
+    // 行距，导致内容越出下边距、行距虚大）
+    let first_page_capacity = (available - title_area).max(MIN_LINE_GAP);
 
     // 1) 贪心分页：以最小行距累积高度，超限则换页
     let mut pages: Vec<Vec<usize>> = vec![Vec::new()];
@@ -160,9 +186,11 @@ pub fn render_to_pdf(events: &[ScoreEvent], output_path: &str) -> Result<(), Str
     for i in 0..lines.len() {
         let (top, bottom) = extents[i];
         let n = pages.last().map(|p| p.len()).unwrap_or(0);
+        // 首页容量扣除标题区，后续页为整页
+        let capacity = if pages.len() == 1 { first_page_capacity } else { available };
         let used = page_top_sum + page_bottom_sum + (n as f32 - 1.0).max(0.0) * MIN_LINE_GAP;
         let would_be = used + top + bottom + if n > 0 { MIN_LINE_GAP } else { 0.0 };
-        if n > 0 && would_be > available {
+        if n > 0 && would_be > capacity {
             pages.push(vec![i]);
             page_top_sum = top;
             page_bottom_sum = bottom;
@@ -173,24 +201,27 @@ pub fn render_to_pdf(events: &[ScoreEvent], output_path: &str) -> Result<(), Str
         }
     }
 
-    // 2) 每页均匀分配剩余空间到各行间隙（设上限，避免行距过散），求出每行 y_base
+    // 2) 页内行距：以"自然行距"（防重叠下限）为底，用剩余空间做水塘填充，
+    //    使各行基线间距尽可能均匀。之前是"把剩余空间等额加到每个间隙"，
+    //    结果带 tempo/dynamics 的高行与普通行之间出现 56~132pt 的落差。
     let mut line_ys: Vec<f32> = Vec::with_capacity(lines.len());
     for (page_idx, page) in pages.iter().enumerate() {
-        let n = page.len();
-        let total_top: f32 = page.iter().map(|&i| extents[i].0).sum();
-        let total_bottom: f32 = page.iter().map(|&i| extents[i].1).sum();
-        let need = total_top + total_bottom + (n as f32 - 1.0).max(0.0) * MIN_LINE_GAP;
-        let extra_per_gap = if n >= 2 {
-            ((available - need) / (n as f32 - 1.0)).max(0.0).min(MAX_EXTRA_PER_GAP)
-        } else {
-            0.0
-        };
+        let page_available = available - if page_idx == 0 { title_area } else { 0.0 };
+        // 自然行距：上一行 bottom + 本行 top + 最小间距（内容不重叠的下限）
+        let min_gaps: Vec<f32> = page
+            .windows(2)
+            .map(|w| extents[w[0]].1 + extents[w[1]].0 + MIN_LINE_GAP)
+            .collect();
+        // 行距总预算：页可用高度 - 首行 top - 末行 bottom
+        let budget = (page_available - extents[page[0]].0 - extents[*page.last().unwrap()].1)
+            .max(0.0);
+        let gaps = even_gaps(&min_gaps, budget);
+
         // 第一页顶部让出标题区，首行音符整体下移
         let mut y = PAGE_HEIGHT - MARGIN_TOP - if page_idx == 0 { title_area } else { 0.0 };
-        for (idx, &li) in page.iter().enumerate() {
+        for idx in 0..page.len() {
             if idx > 0 {
-                // 行距 = 上一行 bottom + 本行 top + 最小间距 + 分配余量
-                y -= extents[li - 1].1 + extents[li].0 + MIN_LINE_GAP + extra_per_gap;
+                y -= gaps[idx - 1];
             }
             line_ys.push(y);
         }
@@ -244,7 +275,11 @@ pub fn render_to_pdf(events: &[ScoreEvent], output_path: &str) -> Result<(), Str
         .count(page_refs.len() as i32);
 
     let buf = pdf.finish();
-    std::fs::write(output_path, buf).map_err(|e| format!("写入 PDF 失败：{}", e))?;
+    if let Err(e) = std::fs::write(output_path, buf) {
+        let msg = format!("写入 PDF 失败：{}", e);
+        diag.error(&msg);
+        return Err(msg);
+    }
 
     Ok(())
 }
@@ -655,6 +690,53 @@ fn line_extents(line: &MusicLine) -> (f32, f32) {
         bottom = bottom.max(HAIRPIN_MIN_DEPTH) + HAIRPIN_GAP + HAIRPIN_HALF;
     }
     (top, bottom)
+}
+
+/// 水塘填充（water-filling）：把行距预算尽可能均匀地分配到各行距上。
+///
+/// `min_gaps` 是各相邻行避免内容重叠所需的最小基线间距，`budget` 是这一页
+/// 所有行距之和的预算。返回的行距满足 `gap_i = max(min_gaps[i], level)`：
+/// 所有低于水位 `level` 的行距都被抬到同一高度（基线间距一致），
+/// 内容特别高的行（如带 tempo/dynamics）保持各自的自然下限、不强行压缩
+/// 以免重叠。单个行距的上浮量设上限，避免行数很少的页面行距失控，
+/// 剩余空间留在页底。
+fn even_gaps(min_gaps: &[f32], budget: f32) -> Vec<f32> {
+    let n = min_gaps.len();
+    let mut gaps = min_gaps.to_vec();
+    if n == 0 {
+        return gaps;
+    }
+    let base_sum: f32 = gaps.iter().sum();
+    let mut extra = (budget - base_sum).max(0.0);
+    if extra <= 0.0 {
+        return gaps;
+    }
+
+    // 按自然行距升序，逐层抬高到次小值（水位填充）
+    let mut sorted = min_gaps.to_vec();
+    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let mut level = sorted[0];
+    let mut i = 0;
+    while i < n {
+        let next = if i + 1 < n { sorted[i + 1] } else { f32::INFINITY };
+        let cost = (next - level) * (i + 1) as f32;
+        if cost <= extra {
+            extra -= cost;
+            level = next;
+            i += 1;
+        } else {
+            level += extra / (i + 1) as f32;
+            break;
+        }
+    }
+
+    // 应用水位；单个行距上浮不超过上限
+    let extra_cap = MAX_EXTRA_PER_GAP * 2.0;
+    for g in gaps.iter_mut() {
+        let target = (*g).max(level);
+        *g += (target - *g).min(extra_cap);
+    }
+    gaps
 }
 
 /// 判断事件是否占 y_base 行的水平空间（需要推进 cursor）。
@@ -1235,21 +1317,18 @@ fn render_grace(
     // 2) 减时线：同减时线组内连续相连
     draw_grace_lines(content, elements, x, note_y, 0, size);
 
-    // 3) 小弧（180°~270° 的 1/4 圆弧）：位于装饰音八度点（若有）下方、无八度点则
-    //    数字底部下方，圆心向右平移两个半径（靠近主音符方向），线宽随字号缩小。
-    //    注意 PDF 坐标 y 向上：正下方是 cy - r。
+    // 3) 小弧（180°~270° 的 1/4 圆弧）：位于装饰音最下层内容（低八度点/减时线）
+    //    下方，留出小间隙。旧逻辑只以"高八度点/数字基线"为参考：低八度音符的
+    //    点会与圆弧重叠（打架）；间隙又过大，让装饰音与圆弧脱节（浮起）。
+    //    注意 PDF 坐标 y 向上：圆弧左端在 cy（最高），底部在 cy - r（最低）。
     let (first, last) = beam_bounds(elements, x, GRACE_SPACING, GRACE_TIGHT_SPACING);
     if first != f32::MIN {
         let scale = size / NOTE_FONT_SIZE;
-        let max_oct = flatten_beam(elements).iter().map(|n| n.octave).max().unwrap_or(0);
-        // 圆心 x = 装饰音组中心向右平移两个半径
+        let deepest = grace_deepest(elements, size);
+        // 圆心 x = 装饰音组中心向右平移两个半径（靠近主音符方向）
         let cx = (first + last) / 2.0 + 2.0 * GRACE_ARC_RADIUS;
-        // 圆心 y = 八度点底部（若有八度点）/ 装饰音数字底部（基线），再下移两个半径
-        let cy = if max_oct > 0 {
-            note_y + size * 0.7 + OCT_DOT_GAP * scale
-        } else {
-            note_y
-        } - 2.0 * GRACE_ARC_RADIUS;
+        // 圆心 y：圆弧顶部（左端，y = cy）贴在最下层内容下方
+        let cy = note_y - deepest - GRACE_ARC_GAP;
         let r = GRACE_ARC_RADIUS;
         // 三次贝塞尔近似 1/4 圆弧（k = 0.5523）：从 180°（正左）弯到 270°（正下）
         let p0 = (cx - r, cy);
@@ -1264,6 +1343,33 @@ fn render_grace(
         content.stroke();
         content.restore_state();
     }
+}
+
+/// 装饰音组内最下层内容相对 note_y 的下探深度（低八度点、减时线）。
+/// 与 render_note_body / draw_grace_lines 的 y 计算保持一致，
+/// 用于定位装饰音下方的圆弧，避免圆弧与音符重叠。
+fn grace_deepest(elements: &[BeamElement], size: f32) -> f32 {
+    let scale = size / NOTE_FONT_SIZE;
+    let dot_size = DOT_SIZE * scale;
+    let oct_gap = OCT_DOT_GAP * scale;
+    let oct_vgap = OCT_DOT_VGAP * scale;
+    let dur_y = DURATION_LINE_Y * scale;
+    let dur_gap = DURATION_LINE_GAP * scale;
+    let mut deepest = 0.0f32;
+    for n in flatten_beam(elements) {
+        // 减时线：按该音符时值对应的线数，最深层线在 note_y - dur_y - (lc-1)*dur_gap
+        let lc = duration_line_count(n.duration);
+        let line_bottom = if lc > 0 { dur_y + (lc as f32 - 1.0) * dur_gap } else { 0.0 };
+        // 低八度点：位于减时线（若有）下方，逐点堆叠
+        let note_bottom = if n.octave < 0 {
+            let base = if lc > 0 { line_bottom + oct_gap } else { oct_gap };
+            base + (-n.octave as f32 - 1.0) * (dot_size + oct_vgap) + dot_size
+        } else {
+            line_bottom
+        };
+        deepest = deepest.max(note_bottom);
+    }
+    deepest
 }
 
 /// 递归渲染装饰音小号音符（间距与 draw_grace_lines 的游标推进保持一致）

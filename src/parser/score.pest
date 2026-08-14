@@ -60,8 +60,12 @@ octave_change = @{ "^" ~ (("+" | "-" | "=") ~ ASCII_DIGIT?)? }
 
 // ============================================
 // 方括号：减时线（支持嵌套）
+// 注意：必须为复合原子规则（$）。若为非原子，pest 的静默 WHITESPACE 会在
+// 元素间自动吞掉方括号内的空格，try_extract_beam 将无法用空格区分
+// "紧贴/松散"（[12] 紧贴，[1 2] 松散）。方括号内的空白由
+// bracket_inner 的 whitespace 分支显式匹配，节点保留在解析树中。
 // ============================================
-bracket = { "[" ~ bracket_inner+ ~ "]" }
+bracket = ${ "[" ~ bracket_inner+ ~ "]" }
 bracket_inner = { bracket | note | chord | tie | dot | control | whitespace }
 
 // ============================================
