@@ -118,27 +118,20 @@ fn main() {
     let events = parse_and_extract(&score, &mut diag);
     if diag.has_error() {
         diag.report();
-        ui::fatal("解析失败，已中止");
+        ui::fatal_bare("中止：解析存在错误（详情见上方）");
     }
     ui::success(&format!("Parse success! Total {} events", events.len()));
     for (i, event) in events.iter().enumerate() {
         println!("  [{:2}] {}", i + 1, event);
     }
 
-    match render_to_pdf(&events, &output_path, &font_dirs, &mut diag) {
-        Ok(()) => {
-            // 渲染期警告（如字体缺失回退）此时一并输出
-            diag.report();
-            if diag.has_error() {
-                // 例如"没有可渲染的事件"：错误已记入收集器，不再假报成功
-                ui::fatal("渲染失败，已中止");
-            }
-            let abs_path = Path::new(&output_path).canonicalize().unwrap_or_else(|_| Path::new(&output_path).to_path_buf());
-            ui::success(&format!("PDF generated: {}", abs_path.display()));
-        }
-        Err(e) => {
-            diag.report();
-            ui::error(&format!("Fail to generate PDF: {}", e));
-        }
+    render_to_pdf(&events, &output_path, &font_dirs, &mut diag);
+    // 渲染期的所有错误与警告（字体缺失回退、无事件、写文件失败）统一在此报告
+    diag.report();
+    if diag.has_error() {
+        // 具体错误已由上面 report 详述，这里只声明中止、不重复错误计数
+        ui::fatal_bare("中止：渲染存在错误（详情见上方）");
     }
+    let abs_path = Path::new(&output_path).canonicalize().unwrap_or_else(|_| Path::new(&output_path).to_path_buf());
+    ui::success(&format!("PDF generated: {}", abs_path.display()));
 }

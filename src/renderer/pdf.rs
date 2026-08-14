@@ -101,13 +101,14 @@ const TITLE_AREA_GAP: f32 = 50.0;
 
 /// 将乐谱事件渲染为 PDF 文件。
 /// `font_dirs`：可选的字体查找目录，传给字体模块以替代内置的系统字体路径。
-/// 错误与警告记录到 `diag`（如无事件、字体缺失回退），不再直接中断。
+/// 错误与警告统一记录到 `diag`（如无事件、字体缺失回退、写文件失败），
+/// 不再用 `Result` 中断——调用方通过 `diag.has_error()` 判断是否整体失败。
 pub fn render_to_pdf(
     events: &[ScoreEvent],
     output_path: &str,
     font_dirs: &[Option<std::path::PathBuf>],
     diag: &mut crate::diagnostics::Diagnostics,
-) -> Result<(), String> {
+) {
     // 提取页面元数据（#title/#subtitle/#credit），不参与音符行内布局
     let (meta, note_events) = extract_page_meta(events);
     let title_area = title_area_height(&meta);
@@ -115,7 +116,7 @@ pub fn render_to_pdf(
     let lines = layout_lines(&note_events);
     if lines.is_empty() {
         diag.error("没有可渲染的事件");
-        return Ok(());
+        return;
     }
 
     let mut pdf = Pdf::new();
@@ -276,12 +277,8 @@ pub fn render_to_pdf(
 
     let buf = pdf.finish();
     if let Err(e) = std::fs::write(output_path, buf) {
-        let msg = format!("写入 PDF 失败：{}", e);
-        diag.error(&msg);
-        return Err(msg);
+        diag.error(format!("写入 PDF 失败：{}", e));
     }
-
-    Ok(())
 }
 
 // ============================================
