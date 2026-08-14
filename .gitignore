@@ -22,7 +22,11 @@ rustc-ice-*.txt
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
-/target
-/test
+
+# 本地/IDE 文件（target 已由上方模板的 `target` 规则覆盖，此处不重复）
 /.trae
 /.DS_Store
+
+# 测试目录：样例乐谱（*.llpartition 等）需要入库，保证克隆后可以复现；
+# 仅忽略运行生成的 PDF 产物（体积大且可随时重新生成）
+/test/*.pdf
