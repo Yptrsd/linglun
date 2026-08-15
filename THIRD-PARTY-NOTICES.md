@@ -612,6 +612,6 @@ authorization of the copyright holder.
 ---
 
 所列许可证文本来自各 crate 的 license 文件或 crates.io 元数据。
-linglun 自身采用 MIT 许可证（见项目根目录 LICENSE 文件）。
+linglun 自身采用 Unlicense 许可证（见项目根目录 LICENSE 文件）。
 
 This software incorporates data from the Unicode Standard.
