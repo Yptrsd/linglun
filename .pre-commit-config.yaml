@@ -1,9 +1,4 @@
 # .pre-commit-config.yaml
-ci:
-  setup: |
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-    echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-
 repos:
   # 1. 通用基础钩子
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -19,8 +14,8 @@ repos:
     rev: v1.0
     hooks:
       - id: fmt
-        args: [--all, --, --check]  # 检查格式，不自动修改
-
+        args: [--all]
+        pass_filenames: false
   # 3. Rust 代码 lint (Clippy)
   - repo: local
     hooks:
