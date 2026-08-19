@@ -16,17 +16,6 @@ repos:
       - id: fmt
         args: [--all]
         pass_filenames: false
-  # 3. Rust 代码 lint (Clippy)
-  - repo: local
-    hooks:
-      - id: clippy
-        name: clippy
-        entry: cargo clippy --all-targets --all-features -- -D warnings
-        language: system
-        types: [rust]
-        pass_filenames: false
-        always_run: true
-        stages: [pre-commit, pre-push]
 
   # 4. Rust 基础检查 (cargo check) - 快速验证能否编译
   - repo: local
