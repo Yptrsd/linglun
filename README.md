@@ -178,24 +178,6 @@ git add .
 git commit -m "your message"
 ```
 
-#### 添加 clippy 钩子（可选）
-
-如果希望在提交前也运行 clippy 检查，可在 `.pre-commit-config.yaml` 的 `local` hooks 部分添加：
-
-```yaml
-  - repo: local
-    hooks:
-      # ... existing hooks ...
-      - id: clippy
-        name: clippy
-        entry: cargo clippy --all-targets -- -D warnings
-        language: system
-        types: [rust]
-        pass_filenames: false
-        always_run: true
-        stages: [pre-commit]
-```
-
 ## 许可
 
 [Unlicense](LICENSE)
