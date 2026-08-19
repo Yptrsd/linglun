@@ -60,12 +60,12 @@ impl BeamElement {
 pub enum ScoreEvent {
     Note(Note),
     Chord(Vec<Note>),
-    Beam(Vec<BeamElement>),     // 减时线组：支持嵌套多层减时线
-    Slur(Vec<Note>),            // 连线组：音符上方画弧线，不改变时值
-    Grace(Vec<BeamElement>),    // 装饰音（倚音）：主音符前的小号音符组，保留减时线组结构
+    Beam(Vec<BeamElement>),  // 减时线组：支持嵌套多层减时线
+    Slur(Vec<Note>),         // 连线组：音符上方画弧线，不改变时值
+    Grace(Vec<BeamElement>), // 装饰音（倚音）：主音符前的小号音符组，保留减时线组结构
     Control(String, String),
     Barline(BarlineType),
-    Extend,                    // 延长一拍
+    Extend, // 延长一拍
 }
 
 impl std::fmt::Display for Note {
@@ -83,7 +83,7 @@ impl std::fmt::Display for Note {
         let octave_str = if self.octave > 0 {
             format!("^{}", "+".repeat(self.octave as usize))
         } else if self.octave < 0 {
-            format!("{}", "-".repeat((-self.octave) as usize))
+            "-".repeat((-self.octave) as usize).to_string()
         } else {
             String::new()
         };
@@ -230,28 +230,22 @@ fn extract_events(pair: &pest::iterators::Pair<Rule>, events: &mut Vec<ScoreEven
                                     events.push(ScoreEvent::Note(n));
                                 }
                                 ScoreEvent::Chord(mut notes) => {
-                                    if !attached {
-                                        if let Some(first) = notes.first_mut() {
-                                            first.accidental = Some(acc);
-                                            attached = true;
-                                        }
+                                    if !attached && let Some(first) = notes.first_mut() {
+                                        first.accidental = Some(acc);
+                                        attached = true;
                                     }
                                     events.push(ScoreEvent::Chord(notes));
                                 }
                                 ScoreEvent::Beam(mut elems) => {
-                                    if !attached {
-                                        if attach_accidental_to_beam(&mut elems, acc) {
-                                            attached = true;
-                                        }
+                                    if !attached && attach_accidental_to_beam(&mut elems, acc) {
+                                        attached = true;
                                     }
                                     events.push(ScoreEvent::Beam(elems));
                                 }
                                 ScoreEvent::Slur(mut notes) => {
-                                    if !attached {
-                                        if let Some(first) = notes.first_mut() {
-                                            first.accidental = Some(acc);
-                                            attached = true;
-                                        }
+                                    if !attached && let Some(first) = notes.first_mut() {
+                                        first.accidental = Some(acc);
+                                        attached = true;
                                     }
                                     events.push(ScoreEvent::Slur(notes));
                                 }
@@ -494,11 +488,7 @@ fn try_extract_slur(pair: &pest::iterators::Pair<Rule>, duration: u32) -> Option
     for child in pair.clone().into_inner() {
         collect_group_notes(&child, &mut notes, duration)?;
     }
-    if notes.is_empty() {
-        None
-    } else {
-        Some(notes)
-    }
+    if notes.is_empty() { None } else { Some(notes) }
 }
 
 /// 递归收集音符。遇到非音符元素（和弦/嵌套方括号/嵌套连线）返回 None。
@@ -544,10 +534,10 @@ fn extract_note(pair: &pest::iterators::Pair<Rule>, duration: u32) -> Option<Not
     }
 
     let note_str = pair.as_str();
-    if let Some(first_char) = note_str.chars().next() {
-        if first_char.is_ascii_digit() {
-            pitch = first_char.to_digit(10).unwrap_or(0) as u8;
-        }
+    if let Some(first_char) = note_str.chars().next()
+        && first_char.is_ascii_digit()
+    {
+        pitch = first_char.to_digit(10).unwrap_or(0) as u8;
     }
 
     Some(Note {
@@ -570,7 +560,11 @@ fn parse_octave_modifier(pair: &pest::iterators::Pair<Rule>) -> i8 {
     let mut chars = rest.chars();
     let sign = chars.next();
     let num_str: String = chars.collect();
-    let num: i8 = if num_str.is_empty() { 1 } else { num_str.parse().unwrap_or(1) };
+    let num: i8 = if num_str.is_empty() {
+        1
+    } else {
+        num_str.parse().unwrap_or(1)
+    };
 
     match sign {
         Some('+') => num,
@@ -586,7 +580,11 @@ fn extract_chord(pair: &pest::iterators::Pair<Rule>, duration: u32) -> Vec<Note>
     notes
 }
 
-fn collect_notes_recursively(pair: &pest::iterators::Pair<Rule>, notes: &mut Vec<Note>, duration: u32) {
+fn collect_notes_recursively(
+    pair: &pest::iterators::Pair<Rule>,
+    notes: &mut Vec<Note>,
+    duration: u32,
+) {
     if pair.as_rule() == Rule::note {
         if let Some(note) = extract_note(pair, duration) {
             notes.push(note);
@@ -622,7 +620,11 @@ fn extract_control(pair: &pest::iterators::Pair<Rule>) -> Option<(String, String
 }
 
 /// 将控制指令参数中的音符/减时线等解析为事件（用于 #sharp/#flat/#nat）
-fn extract_param_events(control_pair: &pest::iterators::Pair<Rule>, events: &mut Vec<ScoreEvent>, duration: u32) {
+fn extract_param_events(
+    control_pair: &pest::iterators::Pair<Rule>,
+    events: &mut Vec<ScoreEvent>,
+    duration: u32,
+) {
     for child in control_pair.clone().into_inner() {
         if child.as_rule() == Rule::param {
             for inner in child.clone().into_inner() {
@@ -792,7 +794,10 @@ mod tests {
         assert_eq!(events.len(), 1);
         match &events[0] {
             ScoreEvent::Chord(notes) => {
-                assert_eq!(notes.iter().map(|n| n.pitch).collect::<Vec<_>>(), vec![1, 3, 5]);
+                assert_eq!(
+                    notes.iter().map(|n| n.pitch).collect::<Vec<_>>(),
+                    vec![1, 3, 5]
+                );
                 assert!(notes.iter().all(|n| n.duration == 4));
             }
             other => panic!("预期 Chord，实际 {:?}", other),
@@ -804,7 +809,10 @@ mod tests {
         let events = parse("{1 {2 3}}");
         match &events[0] {
             ScoreEvent::Chord(notes) => {
-                assert_eq!(notes.iter().map(|n| n.pitch).collect::<Vec<_>>(), vec![1, 2, 3]);
+                assert_eq!(
+                    notes.iter().map(|n| n.pitch).collect::<Vec<_>>(),
+                    vec![1, 2, 3]
+                );
             }
             other => panic!("预期 Chord，实际 {:?}", other),
         }
@@ -819,9 +827,13 @@ mod tests {
         match &events[0] {
             ScoreEvent::Beam(elements) => {
                 assert_eq!(elements.len(), 2);
-                assert!(matches!(&elements[0], BeamElement::Note(n, false) if n.pitch == 1 && n.duration == 8));
+                assert!(
+                    matches!(&elements[0], BeamElement::Note(n, false) if n.pitch == 1 && n.duration == 8)
+                );
                 // 无空格 → 第二个音符紧贴
-                assert!(matches!(&elements[1], BeamElement::Note(n, true) if n.pitch == 2 && n.duration == 8));
+                assert!(
+                    matches!(&elements[1], BeamElement::Note(n, true) if n.pitch == 2 && n.duration == 8)
+                );
             }
             other => panic!("预期 Beam，实际 {:?}", other),
         }
@@ -859,14 +871,20 @@ mod tests {
         match &events[0] {
             ScoreEvent::Beam(elements) => {
                 assert_eq!(elements.len(), 2);
-                assert!(matches!(&elements[0], BeamElement::Note(n, false) if n.pitch == 5 && n.duration == 8));
+                assert!(
+                    matches!(&elements[0], BeamElement::Note(n, false) if n.pitch == 5 && n.duration == 8)
+                );
                 match &elements[1] {
                     BeamElement::Nested(inner, tight) => {
                         // [5 [67]] 中间有空格 → Nested 不紧贴（bracket 原子规则下空格可见）
                         assert!(!tight);
                         assert_eq!(inner.len(), 2);
-                        assert!(matches!(&inner[0], BeamElement::Note(n, false) if n.pitch == 6 && n.duration == 16));
-                        assert!(matches!(&inner[1], BeamElement::Note(n, true) if n.pitch == 7 && n.duration == 16));
+                        assert!(
+                            matches!(&inner[0], BeamElement::Note(n, false) if n.pitch == 6 && n.duration == 16)
+                        );
+                        assert!(
+                            matches!(&inner[1], BeamElement::Note(n, true) if n.pitch == 7 && n.duration == 16)
+                        );
                     }
                     other => panic!("预期 Nested，实际 {:?}", other),
                 }
@@ -894,7 +912,9 @@ mod tests {
         match &events[0] {
             ScoreEvent::Beam(elements) => {
                 assert_eq!(elements.len(), 3);
-                assert!(matches!(&elements[0], BeamElement::Note(n, false) if n.pitch == 1 && n.accidental == Some(Accidental::Sharp)));
+                assert!(
+                    matches!(&elements[0], BeamElement::Note(n, false) if n.pitch == 1 && n.accidental == Some(Accidental::Sharp))
+                );
             }
             other => panic!("预期 Beam，实际 {:?}", other),
         }
@@ -905,7 +925,10 @@ mod tests {
         let events = parse("[5 [67]]");
         match &events[0] {
             ScoreEvent::Beam(elements) => {
-                let pitches = flatten_beam(elements).iter().map(|n| n.pitch).collect::<Vec<_>>();
+                let pitches = flatten_beam(elements)
+                    .iter()
+                    .map(|n| n.pitch)
+                    .collect::<Vec<_>>();
                 assert_eq!(pitches, vec![5, 6, 7]);
             }
             other => panic!("预期 Beam，实际 {:?}", other),
@@ -920,7 +943,10 @@ mod tests {
         assert_eq!(events.len(), 1);
         match &events[0] {
             ScoreEvent::Slur(notes) => {
-                assert_eq!(notes.iter().map(|n| n.pitch).collect::<Vec<_>>(), vec![1, 2, 3, 4]);
+                assert_eq!(
+                    notes.iter().map(|n| n.pitch).collect::<Vec<_>>(),
+                    vec![1, 2, 3, 4]
+                );
                 assert!(notes.iter().all(|n| n.duration == 4));
             }
             other => panic!("预期 Slur，实际 {:?}", other),
@@ -943,7 +969,9 @@ mod tests {
 
     #[test]
     fn key_control() {
-        assert!(matches!(&parse("#key<C>")[0], ScoreEvent::Control(n, v) if n == "key" && v == "C"));
+        assert!(
+            matches!(&parse("#key<C>")[0], ScoreEvent::Control(n, v) if n == "key" && v == "C")
+        );
     }
 
     #[test]
@@ -956,32 +984,44 @@ mod tests {
 
     #[test]
     fn tempo_control_chinese() {
-        assert!(matches!(&parse("#tempo<中速>")[0], ScoreEvent::Control(n, v) if n == "tempo" && v == "中速"));
+        assert!(
+            matches!(&parse("#tempo<中速>")[0], ScoreEvent::Control(n, v) if n == "tempo" && v == "中速")
+        );
     }
 
     #[test]
     fn timesig_control() {
-        assert!(matches!(&parse("#timesig<4/4>")[0], ScoreEvent::Control(n, v) if n == "timesig" && v == "4/4"));
+        assert!(
+            matches!(&parse("#timesig<4/4>")[0], ScoreEvent::Control(n, v) if n == "timesig" && v == "4/4")
+        );
     }
 
     #[test]
     fn dynamics_control() {
-        assert!(matches!(&parse("#dynamics<ff>")[0], ScoreEvent::Control(n, v) if n == "dynamics" && v == "ff"));
+        assert!(
+            matches!(&parse("#dynamics<ff>")[0], ScoreEvent::Control(n, v) if n == "dynamics" && v == "ff")
+        );
     }
 
     #[test]
     fn title_control_chinese() {
-        assert!(matches!(&parse("#title<我的歌>")[0], ScoreEvent::Control(n, v) if n == "title" && v == "我的歌"));
+        assert!(
+            matches!(&parse("#title<我的歌>")[0], ScoreEvent::Control(n, v) if n == "title" && v == "我的歌")
+        );
     }
 
     #[test]
     fn unknown_control() {
-        assert!(matches!(&parse("#foo<bar>")[0], ScoreEvent::Control(n, v) if n == "foo" && v == "bar"));
+        assert!(
+            matches!(&parse("#foo<bar>")[0], ScoreEvent::Control(n, v) if n == "foo" && v == "bar")
+        );
     }
 
     #[test]
     fn control_without_param() {
-        assert!(matches!(&parse("#foo")[0], ScoreEvent::Control(n, v) if n == "foo" && v == ""));
+        assert!(
+            matches!(&parse("#foo")[0], ScoreEvent::Control(n, v) if n == "foo" && v.is_empty())
+        );
     }
 
     // ---------- 变音记号（合并进音符） ----------
@@ -1003,7 +1043,9 @@ mod tests {
         assert_eq!(events.len(), 2);
         match &events[0] {
             ScoreEvent::Beam(elements) => {
-                assert!(matches!(&elements[0], BeamElement::Note(n, _) if n.accidental == Some(Accidental::Sharp)));
+                assert!(
+                    matches!(&elements[0], BeamElement::Note(n, _) if n.accidental == Some(Accidental::Sharp))
+                );
                 assert!(matches!(&elements[1], BeamElement::Note(n, _) if n.accidental.is_none()));
             }
             other => panic!("预期 Beam，实际 {:?}", other),
@@ -1020,8 +1062,12 @@ mod tests {
         match &events[0] {
             ScoreEvent::Grace(elements) => {
                 assert_eq!(elements.len(), 2);
-                assert!(matches!(&elements[0], BeamElement::Note(n, _) if n.pitch == 5 && n.duration == 4));
-                assert!(matches!(&elements[1], BeamElement::Note(n, _) if n.pitch == 6 && n.duration == 4));
+                assert!(
+                    matches!(&elements[0], BeamElement::Note(n, _) if n.pitch == 5 && n.duration == 4)
+                );
+                assert!(
+                    matches!(&elements[1], BeamElement::Note(n, _) if n.pitch == 6 && n.duration == 4)
+                );
             }
             other => panic!("预期 Grace，实际 {:?}", other),
         }
@@ -1041,14 +1087,20 @@ mod tests {
                     BeamElement::Nested(inner, tight) => {
                         assert!(!tight); // grace 包裹层固定不紧贴
                         assert_eq!(inner.len(), 2);
-                        assert!(matches!(&inner[0], BeamElement::Note(n, false) if n.pitch == 1 && n.duration == 8));
+                        assert!(
+                            matches!(&inner[0], BeamElement::Note(n, false) if n.pitch == 1 && n.duration == 8)
+                        );
                         match &inner[1] {
                             BeamElement::Nested(deep, deep_tight) => {
                                 assert!(*deep_tight); // 1[ 之间无空格 → 紧贴
                                 assert_eq!(deep.len(), 2);
-                                assert!(matches!(&deep[0], BeamElement::Note(n, false) if n.pitch == 2 && n.octave == -1 && n.duration == 16));
+                                assert!(
+                                    matches!(&deep[0], BeamElement::Note(n, false) if n.pitch == 2 && n.octave == -1 && n.duration == 16)
+                                );
                                 // 2^- 与 3 之间有空格，但装饰音组内空格被忽略 → 仍紧贴
-                                assert!(matches!(&deep[1], BeamElement::Note(n, true) if n.pitch == 3 && n.duration == 16));
+                                assert!(
+                                    matches!(&deep[1], BeamElement::Note(n, true) if n.pitch == 3 && n.duration == 16)
+                                );
                             }
                             other => panic!("预期 Nested，实际 {:?}", other),
                         }
@@ -1075,7 +1127,10 @@ mod tests {
                 let notes_b = flatten_beam(b);
                 assert_eq!(notes_a.len(), notes_b.len());
                 for (na, nb) in notes_a.iter().zip(&notes_b) {
-                    assert_eq!((na.pitch, na.octave, na.duration), (nb.pitch, nb.octave, nb.duration));
+                    assert_eq!(
+                        (na.pitch, na.octave, na.duration),
+                        (nb.pitch, nb.octave, nb.duration)
+                    );
                 }
                 // 逐元素对比 tight 标记（递归）
                 fn tight_flags(elements: &[BeamElement]) -> Vec<bool> {
@@ -1108,19 +1163,28 @@ mod tests {
         assert_note(&events[1], 1, 0, 4, false, None);
         match &events[2] {
             ScoreEvent::Beam(elements) => {
-                assert!(matches!(&elements[0], BeamElement::Note(n, false) if n.pitch == 2 && n.duration == 8));
+                assert!(
+                    matches!(&elements[0], BeamElement::Note(n, false) if n.pitch == 2 && n.duration == 8)
+                );
                 match &elements[1] {
                     BeamElement::Nested(inner, tight) => {
                         assert!(*tight); // 2[ 之间无空格 → 紧贴
-                        assert!(matches!(&inner[0], BeamElement::Note(n, false) if n.pitch == 3 && n.duration == 16));
-                        assert!(matches!(&inner[1], BeamElement::Note(n, true) if n.pitch == 4 && n.duration == 16));
+                        assert!(
+                            matches!(&inner[0], BeamElement::Note(n, false) if n.pitch == 3 && n.duration == 16)
+                        );
+                        assert!(
+                            matches!(&inner[1], BeamElement::Note(n, true) if n.pitch == 4 && n.duration == 16)
+                        );
                     }
                     other => panic!("预期 Nested，实际 {:?}", other),
                 }
             }
             other => panic!("预期 Beam，实际 {:?}", other),
         }
-        assert!(matches!(&events[3], ScoreEvent::Barline(BarlineType::Single)));
+        assert!(matches!(
+            &events[3],
+            ScoreEvent::Barline(BarlineType::Single)
+        ));
         assert_note(&events[4], 5, 0, 4, false, None);
         assert_note(&events[5], 6, 0, 4, false, None);
         assert_note(&events[6], 7, 0, 4, false, None);
@@ -1141,11 +1205,26 @@ mod tests {
 
     #[test]
     fn barline_types() {
-        assert!(matches!(&parse("|")[0], ScoreEvent::Barline(BarlineType::Single)));
-        assert!(matches!(&parse("||")[0], ScoreEvent::Barline(BarlineType::Double)));
-        assert!(matches!(&parse("|||")[0], ScoreEvent::Barline(BarlineType::Final)));
-        assert!(matches!(&parse("||:")[0], ScoreEvent::Barline(BarlineType::RepeatStart)));
-        assert!(matches!(&parse(":||")[0], ScoreEvent::Barline(BarlineType::RepeatEnd)));
+        assert!(matches!(
+            &parse("|")[0],
+            ScoreEvent::Barline(BarlineType::Single)
+        ));
+        assert!(matches!(
+            &parse("||")[0],
+            ScoreEvent::Barline(BarlineType::Double)
+        ));
+        assert!(matches!(
+            &parse("|||")[0],
+            ScoreEvent::Barline(BarlineType::Final)
+        ));
+        assert!(matches!(
+            &parse("||:")[0],
+            ScoreEvent::Barline(BarlineType::RepeatStart)
+        ));
+        assert!(matches!(
+            &parse(":||")[0],
+            ScoreEvent::Barline(BarlineType::RepeatEnd)
+        ));
     }
 
     #[test]
@@ -1153,7 +1232,10 @@ mod tests {
         // ||: 不会被拆成 | 和 |:
         let events = parse("1 ||: 2");
         assert_eq!(events.len(), 3);
-        assert!(matches!(&events[1], ScoreEvent::Barline(BarlineType::RepeatStart)));
+        assert!(matches!(
+            &events[1],
+            ScoreEvent::Barline(BarlineType::RepeatStart)
+        ));
     }
 
     // ---------- 延长记号 ----------
@@ -1174,12 +1256,18 @@ mod tests {
         for (i, e) in events[0..4].iter().enumerate() {
             assert_note(e, (i + 1) as u8, 0, 4, false, None);
         }
-        assert!(matches!(&events[4], ScoreEvent::Barline(BarlineType::Single)));
+        assert!(matches!(
+            &events[4],
+            ScoreEvent::Barline(BarlineType::Single)
+        ));
         for (i, e) in events[5..8].iter().enumerate() {
             assert_note(e, (5 + i) as u8, 0, 4, false, None);
         }
         assert_note(&events[8], 1, 1, 4, false, None);
-        assert!(matches!(&events[9], ScoreEvent::Barline(BarlineType::Single)));
+        assert!(matches!(
+            &events[9],
+            ScoreEvent::Barline(BarlineType::Single)
+        ));
     }
 
     #[test]
@@ -1194,14 +1282,26 @@ mod tests {
         let score = "1 2 3 4 | [12] (3 4) {1 3 5} | #sharp<1> 2 - ||: 5 6 :|| 7 1^ |||";
         let events = parse(score);
         assert_eq!(events.len(), 19);
-        assert!(matches!(&events[4], ScoreEvent::Barline(BarlineType::Single)));
+        assert!(matches!(
+            &events[4],
+            ScoreEvent::Barline(BarlineType::Single)
+        ));
         assert!(matches!(&events[5], ScoreEvent::Beam(_)));
         assert!(matches!(&events[6], ScoreEvent::Slur(_)));
         assert!(matches!(&events[7], ScoreEvent::Chord(_)));
         assert!(matches!(&events[11], ScoreEvent::Extend));
-        assert!(matches!(&events[12], ScoreEvent::Barline(BarlineType::RepeatStart)));
-        assert!(matches!(&events[15], ScoreEvent::Barline(BarlineType::RepeatEnd)));
-        assert!(matches!(&events[18], ScoreEvent::Barline(BarlineType::Final)));
+        assert!(matches!(
+            &events[12],
+            ScoreEvent::Barline(BarlineType::RepeatStart)
+        ));
+        assert!(matches!(
+            &events[15],
+            ScoreEvent::Barline(BarlineType::RepeatEnd)
+        ));
+        assert!(matches!(
+            &events[18],
+            ScoreEvent::Barline(BarlineType::Final)
+        ));
     }
 
     #[test]

@@ -132,6 +132,8 @@ fn main() {
         // 具体错误已由上面 report 详述，这里只声明中止、不重复错误计数
         ui::fatal_bare("中止：渲染存在错误（详情见上方）");
     }
-    let abs_path = Path::new(&output_path).canonicalize().unwrap_or_else(|_| Path::new(&output_path).to_path_buf());
+    let abs_path = Path::new(&output_path)
+        .canonicalize()
+        .unwrap_or_else(|_| Path::new(&output_path).to_path_buf());
     ui::success(&format!("PDF generated: {}", abs_path.display()));
 }

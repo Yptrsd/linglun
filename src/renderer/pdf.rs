@@ -1,9 +1,7 @@
 use pdf_writer::{Content, Name, Pdf, Rect, Ref, Str};
 
-use crate::parser::{flatten_beam, Accidental, BarlineType, BeamElement, Note, ScoreEvent};
-use crate::renderer::font::{
-    accidental, char_class, icon_to_smufl, CharClass, FontFamily,
-};
+use crate::parser::{Accidental, BarlineType, BeamElement, Note, ScoreEvent, flatten_beam};
+use crate::renderer::font::{CharClass, FontFamily, accidental, char_class, icon_to_smufl};
 
 // ============================================
 // 页面布局常量（A4 纸，单位：PDF 点 = 1/72 英寸）
@@ -131,7 +129,8 @@ pub fn render_to_pdf(
     let fallback_font_id = Ref::new(next_ref);
     next_ref += 1;
     let fallback_font_name = Name(b"F1");
-    pdf.type1_font(fallback_font_id).base_font(Name(b"Helvetica"));
+    pdf.type1_font(fallback_font_id)
+        .base_font(Name(b"Helvetica"));
 
     // 收集乐谱中所有控制指令出现的文本字符（含 SMuFL 映射），
     // 在嵌入前预热，确保 PDF 宽度表和 ToUnicode 完整。
@@ -184,11 +183,14 @@ pub fn render_to_pdf(
     let mut pages: Vec<Vec<usize>> = vec![Vec::new()];
     let mut page_top_sum = 0.0f32;
     let mut page_bottom_sum = 0.0f32;
-    for i in 0..lines.len() {
-        let (top, bottom) = extents[i];
+    for (i, &(top, bottom)) in extents.iter().enumerate().take(lines.len()) {
         let n = pages.last().map(|p| p.len()).unwrap_or(0);
         // 首页容量扣除标题区，后续页为整页
-        let capacity = if pages.len() == 1 { first_page_capacity } else { available };
+        let capacity = if pages.len() == 1 {
+            first_page_capacity
+        } else {
+            available
+        };
         let used = page_top_sum + page_bottom_sum + (n as f32 - 1.0).max(0.0) * MIN_LINE_GAP;
         let would_be = used + top + bottom + if n > 0 { MIN_LINE_GAP } else { 0.0 };
         if n > 0 && would_be > capacity {
@@ -214,8 +216,8 @@ pub fn render_to_pdf(
             .map(|w| extents[w[0]].1 + extents[w[1]].0 + MIN_LINE_GAP)
             .collect();
         // 行距总预算：页可用高度 - 首行 top - 末行 bottom
-        let budget = (page_available - extents[page[0]].0 - extents[*page.last().unwrap()].1)
-            .max(0.0);
+        let budget =
+            (page_available - extents[page[0]].0 - extents[*page.last().unwrap()].1).max(0.0);
         let gaps = even_gaps(&min_gaps, budget);
 
         // 第一页顶部让出标题区，首行音符整体下移
@@ -352,17 +354,41 @@ fn render_page_meta(
     let mut y = PAGE_HEIGHT - MARGIN_TOP - TITLE_LINE_GAP;
     if let Some(t) = &meta.title {
         let w = measure_text_cjk(t, TITLE_FONT_SIZE, fonts);
-        render_text_cjk(content, t, (PAGE_WIDTH - w) / 2.0, y, TITLE_FONT_SIZE, fonts, fallback);
+        render_text_cjk(
+            content,
+            t,
+            (PAGE_WIDTH - w) / 2.0,
+            y,
+            TITLE_FONT_SIZE,
+            fonts,
+            fallback,
+        );
         y -= TITLE_FONT_SIZE + TITLE_LINE_GAP;
     }
     if let Some(s) = &meta.subtitle {
         let w = measure_text_cjk(s, SUBTITLE_FONT_SIZE, fonts);
-        render_text_cjk(content, s, (PAGE_WIDTH - w) / 2.0, y, SUBTITLE_FONT_SIZE, fonts, fallback);
+        render_text_cjk(
+            content,
+            s,
+            (PAGE_WIDTH - w) / 2.0,
+            y,
+            SUBTITLE_FONT_SIZE,
+            fonts,
+            fallback,
+        );
         y -= SUBTITLE_FONT_SIZE + TITLE_LINE_GAP;
     }
     if let Some(c) = &meta.credit {
         let w = measure_text_cjk(c, CREDIT_FONT_SIZE, fonts);
-        render_text_cjk(content, c, PAGE_WIDTH - MARGIN_X - w, y, CREDIT_FONT_SIZE, fonts, fallback);
+        render_text_cjk(
+            content,
+            c,
+            PAGE_WIDTH - MARGIN_X - w,
+            y,
+            CREDIT_FONT_SIZE,
+            fonts,
+            fallback,
+        );
     }
 }
 
@@ -382,12 +408,12 @@ fn render_text_cjk(
             cursor_x += size * 0.28;
             continue;
         }
-        if let Some((f, em)) = &mut fonts.cjk {
-            if let Some((gid, adv)) = f.glyph_entry(ch) {
-                show_glyph(content, em.name, gid, cursor_x, y, size);
-                cursor_x += adv * size / 1000.0;
-                continue;
-            }
+        if let Some((f, em)) = &mut fonts.cjk
+            && let Some((gid, adv)) = f.glyph_entry(ch)
+        {
+            show_glyph(content, em.name, gid, cursor_x, y, size);
+            cursor_x += adv * size / 1000.0;
+            continue;
         }
         // 回退：ASCII 用 Helvetica，其余按默认宽度占位
         if ch.is_ascii() {
@@ -406,11 +432,11 @@ fn measure_text_cjk(text: &str, size: f32, fonts: &mut FontFamily) -> f32 {
             w += size * 0.28;
             continue;
         }
-        if let Some((f, _)) = &mut fonts.cjk {
-            if let Some((_, adv)) = f.glyph_entry(ch) {
-                w += adv * size / 1000.0;
-                continue;
-            }
+        if let Some((f, _)) = &mut fonts.cjk
+            && let Some((_, adv)) = f.glyph_entry(ch)
+        {
+            w += adv * size / 1000.0;
+            continue;
         }
         w += size * 0.5;
     }
@@ -502,8 +528,12 @@ const NATURAL_GAP: f32 = NOTE_SPACING - NOTE_GLYPH_WIDTH;
 fn event_visual_width(event: &ScoreEvent) -> f32 {
     match event {
         ScoreEvent::Beam(elements) => {
-            let (first, last) =
-                beam_bounds(elements, 0.0, NOTE_SPACING, NOTE_SPACING * TIGHT_SPACING_FACTOR);
+            let (first, last) = beam_bounds(
+                elements,
+                0.0,
+                NOTE_SPACING,
+                NOTE_SPACING * TIGHT_SPACING_FACTOR,
+            );
             if first == f32::MIN {
                 NOTE_GLYPH_WIDTH
             } else {
@@ -515,7 +545,11 @@ fn event_visual_width(event: &ScoreEvent) -> f32 {
                 0.0
             } else {
                 let mut w = (notes.len() as f32 - 1.0) * NOTE_SPACING + NOTE_GLYPH_WIDTH;
-                if notes.first().map(|n| n.accidental.is_some()).unwrap_or(false) {
+                if notes
+                    .first()
+                    .map(|n| n.accidental.is_some())
+                    .unwrap_or(false)
+                {
                     w += ACCIDENTAL_ADVANCE + ACCIDENTAL_NOTE_GAP;
                 }
                 w
@@ -562,7 +596,9 @@ fn note_extents(n: &Note) -> (f32, f32) {
     // 顶部：数字 cap，或高音八度点堆叠上沿
     let mut top = NOTE_CAP_HEIGHT;
     if n.octave > 0 {
-        top = NOTE_CAP_HEIGHT + OCT_DOT_GAP + DOT_SIZE
+        top = NOTE_CAP_HEIGHT
+            + OCT_DOT_GAP
+            + DOT_SIZE
             + (n.octave as f32 - 1.0) * (DOT_SIZE + OCT_DOT_VGAP);
     }
     // 底部：减时线，或低音八度点堆叠下沿
@@ -644,11 +680,14 @@ fn event_extents(event: &ScoreEvent) -> (f32, f32) {
             let notes = flatten_beam(elements);
             // 顶部：上抬量 + 数字 cap（若有高八度点则叠加）
             let mut top = GRACE_RAISE + GRACE_FONT_SIZE * 0.7;
-            if let Some(max_oct) = notes.iter().map(|n| n.octave).max() {
-                if max_oct > 0 {
-                    top = GRACE_RAISE + GRACE_FONT_SIZE * 0.7 + OCT_DOT_GAP + DOT_SIZE
-                        + (max_oct as f32 - 1.0) * (DOT_SIZE + OCT_DOT_VGAP);
-                }
+            if let Some(max_oct) = notes.iter().map(|n| n.octave).max()
+                && max_oct > 0
+            {
+                top = GRACE_RAISE
+                    + GRACE_FONT_SIZE * 0.7
+                    + OCT_DOT_GAP
+                    + DOT_SIZE
+                    + (max_oct as f32 - 1.0) * (DOT_SIZE + OCT_DOT_VGAP);
             }
             // 底部：装饰音上抬较高，数字/减时线/弧线均在基线上方，不占下方空间
             (top, 0.0)
@@ -715,7 +754,11 @@ fn even_gaps(min_gaps: &[f32], budget: f32) -> Vec<f32> {
     let mut level = sorted[0];
     let mut i = 0;
     while i < n {
-        let next = if i + 1 < n { sorted[i + 1] } else { f32::INFINITY };
+        let next = if i + 1 < n {
+            sorted[i + 1]
+        } else {
+            f32::INFINITY
+        };
         let cost = (next - level) * (i + 1) as f32;
         if cost <= extra {
             extra -= cost;
@@ -900,7 +943,9 @@ fn render_line(
                                 fonts: &mut *fonts,
                                 fallback,
                             };
-                            super::control::render_default_control(&mut ctx, name, value, *x, y_base);
+                            super::control::render_default_control(
+                                &mut ctx, name, value, *x, y_base,
+                            );
                         }
                     }
                 }
@@ -956,8 +1001,22 @@ fn render_note(
         render_accidental(content, acc, digit_x, y_base, fonts);
         digit_x += ACCIDENTAL_ADVANCE + ACCIDENTAL_NOTE_GAP;
     }
-    render_note_body(content, note, digit_x, y_base, fonts, fallback, NOTE_FONT_SIZE);
-    draw_duration_lines(content, note.duration, digit_x, digit_x + NOTE_GLYPH_WIDTH, y_base);
+    render_note_body(
+        content,
+        note,
+        digit_x,
+        y_base,
+        fonts,
+        fallback,
+        NOTE_FONT_SIZE,
+    );
+    draw_duration_lines(
+        content,
+        note.duration,
+        digit_x,
+        digit_x + NOTE_GLYPH_WIDTH,
+        y_base,
+    );
 }
 
 /// 渲染音符主体（数字 + 八度点 + 附点），不含减时线。
@@ -972,17 +1031,19 @@ fn render_note_body(
     fallback: Name,
     size: f32,
 ) {
-    let digit = if note.is_rest() { '0' } else {
+    let digit = if note.is_rest() {
+        '0'
+    } else {
         char::from_digit(note.pitch as u32, 10).unwrap_or('0')
     };
 
     // 1. 渲染数字（粗体字体 Source Serif Pro Bold，回退 Helvetica）
     let mut rendered = false;
-    if let Some((f, em)) = &mut fonts.latin_bold {
-        if let Some((gid, _)) = f.glyph_entry(digit) {
-            show_glyph(content, em.name, gid, x, y_base, size);
-            rendered = true;
-        }
+    if let Some((f, em)) = &mut fonts.latin_bold
+        && let Some((gid, _)) = f.glyph_entry(digit)
+    {
+        show_glyph(content, em.name, gid, x, y_base, size);
+        rendered = true;
     }
     if !rendered {
         show_ascii(content, fallback, digit, x, y_base, size);
@@ -1002,8 +1063,8 @@ fn render_note_body(
     // 2. 高音八度点（音符视觉上沿之上，垂直堆叠）
     if note.octave > 0 {
         for i in 0..note.octave {
-            let dot_y = y_base + cap + oct_gap + dot_size / 2.0
-                + (i as f32) * (dot_size + oct_vgap);
+            let dot_y =
+                y_base + cap + oct_gap + dot_size / 2.0 + (i as f32) * (dot_size + oct_vgap);
             draw_dot(content, dot_center_x, dot_y, dot_size);
         }
     }
@@ -1088,17 +1149,10 @@ fn render_beam(
         tight_spacing,
     );
 
-    draw_beam_lines(
-        content,
-        elements,
-        x,
-        y_base,
-        0,
-        spacing,
-        tight_spacing,
-    );
+    draw_beam_lines(content, elements, x, y_base, 0, spacing, tight_spacing);
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_beam_notes(
     content: &mut Content,
     elements: &[BeamElement],
@@ -1124,7 +1178,15 @@ fn render_beam_notes(
                     render_accidental(content, acc, *x_cursor, y_base, fonts);
                     *x_cursor += ACCIDENTAL_ADVANCE + ACCIDENTAL_NOTE_GAP;
                 }
-                render_note_body(content, note, *x_cursor, y_base, fonts, fallback, NOTE_FONT_SIZE);
+                render_note_body(
+                    content,
+                    note,
+                    *x_cursor,
+                    y_base,
+                    fonts,
+                    fallback,
+                    NOTE_FONT_SIZE,
+                );
             }
             BeamElement::Nested(inner, _) => {
                 render_beam_notes(
@@ -1265,8 +1327,22 @@ fn render_slur(
 
     for (i, note) in notes.iter().enumerate() {
         let note_x = x + offset + (i as f32) * NOTE_SPACING;
-        render_note_body(content, note, note_x, y_base, fonts, fallback, NOTE_FONT_SIZE);
-        draw_duration_lines(content, note.duration, note_x, note_x + NOTE_GLYPH_WIDTH, y_base);
+        render_note_body(
+            content,
+            note,
+            note_x,
+            y_base,
+            fonts,
+            fallback,
+            NOTE_FONT_SIZE,
+        );
+        draw_duration_lines(
+            content,
+            note.duration,
+            note_x,
+            note_x + NOTE_GLYPH_WIDTH,
+            y_base,
+        );
     }
 
     if notes.len() >= 2 {
@@ -1309,7 +1385,15 @@ fn render_grace(
 
     // 1) 小号音符（数字 + 八度点 + 附点），复用 render_note_body
     let mut x_cursor = x;
-    render_grace_notes(content, elements, &mut x_cursor, note_y, size, fonts, fallback);
+    render_grace_notes(
+        content,
+        elements,
+        &mut x_cursor,
+        note_y,
+        size,
+        fonts,
+        fallback,
+    );
 
     // 2) 减时线：同减时线组内连续相连
     draw_grace_lines(content, elements, x, note_y, 0, size);
@@ -1356,10 +1440,18 @@ fn grace_deepest(elements: &[BeamElement], size: f32) -> f32 {
     for n in flatten_beam(elements) {
         // 减时线：按该音符时值对应的线数，最深层线在 note_y - dur_y - (lc-1)*dur_gap
         let lc = duration_line_count(n.duration);
-        let line_bottom = if lc > 0 { dur_y + (lc as f32 - 1.0) * dur_gap } else { 0.0 };
+        let line_bottom = if lc > 0 {
+            dur_y + (lc as f32 - 1.0) * dur_gap
+        } else {
+            0.0
+        };
         // 低八度点：位于减时线（若有）下方，逐点堆叠
         let note_bottom = if n.octave < 0 {
-            let base = if lc > 0 { line_bottom + oct_gap } else { oct_gap };
+            let base = if lc > 0 {
+                line_bottom + oct_gap
+            } else {
+                oct_gap
+            };
             base + (-n.octave as f32 - 1.0) * (dot_size + oct_vgap) + dot_size
         } else {
             line_bottom
@@ -1437,7 +1529,8 @@ fn draw_grace_lines(
                     content.restore_state();
                 }
                 draw_grace_lines(content, inner, x_cursor, note_y, depth + 1, size);
-                let (_, inner_last) = beam_bounds(inner, x_cursor, GRACE_SPACING, GRACE_TIGHT_SPACING);
+                let (_, inner_last) =
+                    beam_bounds(inner, x_cursor, GRACE_SPACING, GRACE_TIGHT_SPACING);
                 x_cursor = inner_last;
             }
             BeamElement::Note(n, _) => {
@@ -1475,7 +1568,7 @@ fn render_chord(
     fallback: Name,
 ) {
     let mut sorted = notes.to_vec();
-    sorted.sort_by(|a, b| b.pitch.cmp(&a.pitch));
+    sorted.sort_by_key(|b| std::cmp::Reverse(b.pitch));
 
     // 和弦内任一音符有升降号，统一在左侧渲染一次并整体偏移
     let acc = sorted.iter().find_map(|n| n.accidental);
@@ -1491,7 +1584,13 @@ fn render_chord(
     for (i, note) in sorted.iter().enumerate() {
         let y = start_y - (i as f32) * stack_height;
         render_note_body(content, note, digit_x, y, fonts, fallback, NOTE_FONT_SIZE);
-        draw_duration_lines(content, note.duration, digit_x, digit_x + NOTE_GLYPH_WIDTH, y);
+        draw_duration_lines(
+            content,
+            note.duration,
+            digit_x,
+            digit_x + NOTE_GLYPH_WIDTH,
+            y,
+        );
     }
 }
 
@@ -1514,16 +1613,16 @@ fn render_accidental(
         Accidental::Natural => accidental::NATURAL,
     };
     let size = NOTE_FONT_SIZE * 0.9;
-    if let Some((f, em)) = &mut fonts.leland {
-        if let Some((gid, _)) = f.glyph_entry(ch) {
-            // SMuFL accidental 的 advance 远小于轮廓宽度，用 bbox x_max 推断实际视觉宽度
-            let visual_width = f
-                .glyph_bbox(ch)
-                .map(|(_, _, x_max, _)| x_max * size / 1000.0)
-                .unwrap_or(ACCIDENTAL_ADVANCE);
-            show_glyph(content, em.name, gid, x, y_base + ACCIDENTAL_Y_OFFSET, size);
-            return visual_width;
-        }
+    if let Some((f, em)) = &mut fonts.leland
+        && let Some((gid, _)) = f.glyph_entry(ch)
+    {
+        // SMuFL accidental 的 advance 远小于轮廓宽度，用 bbox x_max 推断实际视觉宽度
+        let visual_width = f
+            .glyph_bbox(ch)
+            .map(|(_, _, x_max, _)| x_max * size / 1000.0)
+            .unwrap_or(ACCIDENTAL_ADVANCE);
+        show_glyph(content, em.name, gid, x, y_base + ACCIDENTAL_Y_OFFSET, size);
+        return visual_width;
     }
     ACCIDENTAL_ADVANCE
 }
@@ -1550,21 +1649,21 @@ pub(crate) fn render_tempo(
 
     while !rest.is_empty() {
         // 检测 #icon<name> 模式
-        if rest.starts_with("#icon<") {
-            if let Some(end) = rest.find('>') {
-                let icon_name = &rest["#icon<".len()..end];
-                if let Some(smufl_chars) = icon_to_smufl(icon_name) {
-                    for &smufl_ch in smufl_chars {
-                        if let Some((f, em)) = &mut fonts.leland {
-                            if let Some((gid, adv)) = f.glyph_entry(smufl_ch) {
-                                show_glyph(content, em.name, gid, cursor_x, y, size);
-                                cursor_x += adv * size / 1000.0;
-                            }
-                        }
+        if rest.starts_with("#icon<")
+            && let Some(end) = rest.find('>')
+        {
+            let icon_name = &rest["#icon<".len()..end];
+            if let Some(smufl_chars) = icon_to_smufl(icon_name) {
+                for &smufl_ch in smufl_chars {
+                    if let Some((f, em)) = &mut fonts.leland
+                        && let Some((gid, adv)) = f.glyph_entry(smufl_ch)
+                    {
+                        show_glyph(content, em.name, gid, cursor_x, y, size);
+                        cursor_x += adv * size / 1000.0;
                     }
-                    rest = &rest[end + 1..];
-                    continue;
                 }
+                rest = &rest[end + 1..];
+                continue;
             }
         }
 
@@ -1616,18 +1715,18 @@ pub(crate) fn render_one_char(
     match cls {
         CharClass::Ascii => {
             // 西文：优先 Source Serif Pro Regular
-            if let Some((f, em)) = &mut fonts.latin {
-                if let Some((gid, adv)) = f.glyph_entry(ch) {
-                    show_glyph(content, em.name, gid, x, y, size);
-                    return adv * size / 1000.0;
-                }
+            if let Some((f, em)) = &mut fonts.latin
+                && let Some((gid, adv)) = f.glyph_entry(ch)
+            {
+                show_glyph(content, em.name, gid, x, y, size);
+                return adv * size / 1000.0;
             }
             // 回退：尝试粗体
-            if let Some((f, em)) = &mut fonts.latin_bold {
-                if let Some((gid, adv)) = f.glyph_entry(ch) {
-                    show_glyph(content, em.name, gid, x, y, size);
-                    return adv * size / 1000.0;
-                }
+            if let Some((f, em)) = &mut fonts.latin_bold
+                && let Some((gid, adv)) = f.glyph_entry(ch)
+            {
+                show_glyph(content, em.name, gid, x, y, size);
+                return adv * size / 1000.0;
             }
             // 最后回退：Helvetica 单字节文本
             if ch.is_ascii() {
@@ -1637,18 +1736,18 @@ pub(crate) fn render_one_char(
         }
         CharClass::NonAscii => {
             // 非西文：优先思源宋体 CJK
-            if let Some((f, em)) = &mut fonts.cjk {
-                if let Some((gid, adv)) = f.glyph_entry(ch) {
-                    show_glyph(content, em.name, gid, x, y, size);
-                    return adv * size / 1000.0;
-                }
+            if let Some((f, em)) = &mut fonts.cjk
+                && let Some((gid, adv)) = f.glyph_entry(ch)
+            {
+                show_glyph(content, em.name, gid, x, y, size);
+                return adv * size / 1000.0;
             }
             // 回退：试试 Leland（可能是音乐符号）
-            if let Some((f, em)) = &mut fonts.leland {
-                if let Some((gid, adv)) = f.glyph_entry(ch) {
-                    show_glyph(content, em.name, gid, x, y, size);
-                    return adv * size / 1000.0;
-                }
+            if let Some((f, em)) = &mut fonts.leland
+                && let Some((gid, adv)) = f.glyph_entry(ch)
+            {
+                show_glyph(content, em.name, gid, x, y, size);
+                return adv * size / 1000.0;
             }
             // 最后回退（非 ASCII 可能无法渲染，用占位宽度）
             default_adv
@@ -1657,7 +1756,14 @@ pub(crate) fn render_one_char(
 }
 
 /// 以 Identity-H 编码渲染单个字形（独立 begin_text/end_text）
-pub(crate) fn show_glyph(content: &mut Content, font_name: Name, gid: u16, x: f32, y: f32, size: f32) {
+pub(crate) fn show_glyph(
+    content: &mut Content,
+    font_name: Name,
+    gid: u16,
+    x: f32,
+    y: f32,
+    size: f32,
+) {
     let bytes = [(gid >> 8) as u8, (gid & 0xFF) as u8];
     content.begin_text();
     content.set_font(font_name, size);
@@ -1667,7 +1773,14 @@ pub(crate) fn show_glyph(content: &mut Content, font_name: Name, gid: u16, x: f3
 }
 
 /// 以单字节 ASCII 编码渲染单个字符（Helvetica 回退用）
-pub(crate) fn show_ascii(content: &mut Content, font_name: Name, ch: char, x: f32, y: f32, size: f32) {
+pub(crate) fn show_ascii(
+    content: &mut Content,
+    font_name: Name,
+    ch: char,
+    x: f32,
+    y: f32,
+    size: f32,
+) {
     let buf = [ch as u8];
     content.begin_text();
     content.set_font(font_name, size);
@@ -1826,11 +1939,11 @@ fn render_extend(
 ) {
     // 延长记号 "-" 用粗体西文字体渲染，风格统一
     let mut rendered = false;
-    if let Some((f, em)) = &mut fonts.latin_bold {
-        if let Some((gid, _)) = f.glyph_entry('-') {
-            show_glyph(content, em.name, gid, x, y_base, NOTE_FONT_SIZE);
-            rendered = true;
-        }
+    if let Some((f, em)) = &mut fonts.latin_bold
+        && let Some((gid, _)) = f.glyph_entry('-')
+    {
+        show_glyph(content, em.name, gid, x, y_base, NOTE_FONT_SIZE);
+        rendered = true;
     }
     if !rendered {
         show_ascii(content, fallback, '-', x, y_base, NOTE_FONT_SIZE);
@@ -1846,14 +1959,10 @@ fn draw_dot(content: &mut Content, x: f32, y: f32, size: f32) {
     let k = 0.5522847;
     let kr = k * r;
     content.move_to(x + r, y);
-    content
-        .cubic_to(x + r, y + kr, x + kr, y + r, x, y + r);
-    content
-        .cubic_to(x - kr, y + r, x - r, y + kr, x - r, y);
-    content
-        .cubic_to(x - r, y - kr, x - kr, y - r, x, y - r);
-    content
-        .cubic_to(x + kr, y - r, x + r, y - kr, x + r, y);
+    content.cubic_to(x + r, y + kr, x + kr, y + r, x, y + r);
+    content.cubic_to(x - kr, y + r, x - r, y + kr, x - r, y);
+    content.cubic_to(x - r, y - kr, x - kr, y - r, x, y - r);
+    content.cubic_to(x + kr, y - r, x + r, y - kr, x + r, y);
     content.close_path();
     content.fill_nonzero();
 }

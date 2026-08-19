@@ -22,30 +22,30 @@ use pdf_writer::{Name, Pdf, Rect, Ref, Str};
 /// 注意：U+E520–U+E526 是单个字母（p/m/f/r/s/z/n），
 /// 组合力度记号（pp/mp/mf/ff 等）在 U+E527–U+E53D。
 pub mod dynamics {
-    pub const P: char = '\u{E520}';   // dynamicPiano
-    pub const M: char = '\u{E521}';   // dynamicMezzo
-    pub const F: char = '\u{E522}';   // dynamicForte
-    pub const R: char = '\u{E523}';   // dynamicRinforzando
-    pub const S: char = '\u{E524}';   // dynamicSforzando
-    pub const Z: char = '\u{E525}';   // dynamicZ
-    pub const N: char = '\u{E526}';   // dynamicNiente
-    pub const PP:     char = '\u{E52B}';
-    pub const MP:     char = '\u{E52C}';
-    pub const MF:     char = '\u{E52D}';
-    pub const PF:     char = '\u{E52E}';
-    pub const FF:     char = '\u{E52F}';
-    pub const FFF:    char = '\u{E530}';
-    pub const FFFF:   char = '\u{E531}';
-    pub const FP:     char = '\u{E534}';  // Forte-piano
-    pub const FZ:     char = '\u{E535}';  // Forzando
-    pub const SF:     char = '\u{E536}';
-    pub const SFP:    char = '\u{E537}';
-    pub const SFPP:   char = '\u{E538}';
-    pub const SFZ:    char = '\u{E539}';
-    pub const SFZP:   char = '\u{E53A}';
-    pub const SFFZ:   char = '\u{E53B}';
-    pub const RF:     char = '\u{E53C}';
-    pub const RFZ:    char = '\u{E53D}';
+    pub const P: char = '\u{E520}'; // dynamicPiano
+    pub const M: char = '\u{E521}'; // dynamicMezzo
+    pub const F: char = '\u{E522}'; // dynamicForte
+    pub const R: char = '\u{E523}'; // dynamicRinforzando
+    pub const S: char = '\u{E524}'; // dynamicSforzando
+    pub const Z: char = '\u{E525}'; // dynamicZ
+    pub const N: char = '\u{E526}'; // dynamicNiente
+    pub const PP: char = '\u{E52B}';
+    pub const MP: char = '\u{E52C}';
+    pub const MF: char = '\u{E52D}';
+    pub const PF: char = '\u{E52E}';
+    pub const FF: char = '\u{E52F}';
+    pub const FFF: char = '\u{E530}';
+    pub const FFFF: char = '\u{E531}';
+    pub const FP: char = '\u{E534}'; // Forte-piano
+    pub const FZ: char = '\u{E535}'; // Forzando
+    pub const SF: char = '\u{E536}';
+    pub const SFP: char = '\u{E537}';
+    pub const SFPP: char = '\u{E538}';
+    pub const SFZ: char = '\u{E539}';
+    pub const SFZP: char = '\u{E53A}';
+    pub const SFFZ: char = '\u{E53B}';
+    pub const RF: char = '\u{E53C}';
+    pub const RFZ: char = '\u{E53D}';
 }
 
 /// 拍号数字 0–9
@@ -61,39 +61,39 @@ pub const REPEAT_DOT: char = '\u{E044}';
 /// SMuFL Metronome marks 范围 (U+ECA0–U+ECBF)
 /// 专为文本内联设计的节拍器记号（tempo 标记如 ♩=120 中的时值音符）
 pub mod metro {
-    pub const WHOLE: char         = '\u{ECA2}';  // metNoteWhole
-    pub const HALF: char          = '\u{ECA3}';  // metNoteHalfUp
-    pub const QUARTER: char       = '\u{ECA5}';  // metNoteQuarterUp
-    pub const EIGHTH: char        = '\u{ECA7}';  // metNote8thUp
-    pub const SIXTEENTH: char     = '\u{ECA9}';  // metNote16thUp
-    pub const THIRTY_SECOND: char = '\u{ECAB}';  // metNote32ndUp
-    pub const DOT: char           = '\u{ECB7}';  // metAugmentationDot
+    pub const WHOLE: char = '\u{ECA2}'; // metNoteWhole
+    pub const HALF: char = '\u{ECA3}'; // metNoteHalfUp
+    pub const QUARTER: char = '\u{ECA5}'; // metNoteQuarterUp
+    pub const EIGHTH: char = '\u{ECA7}'; // metNote8thUp
+    pub const SIXTEENTH: char = '\u{ECA9}'; // metNote16thUp
+    pub const THIRTY_SECOND: char = '\u{ECAB}'; // metNote32ndUp
+    pub const DOT: char = '\u{ECB7}'; // metAugmentationDot
 }
 
 /// SMuFL 升降还原记号 (U+E260–U+E262)
 pub mod accidental {
-    pub const SHARP: char   = '\u{E262}';  // accidentalgSharp
-    pub const FLAT: char    = '\u{E260}';  // accidentalgFlat
-    pub const NATURAL: char = '\u{E261}';  // accidentalgNatural
+    pub const SHARP: char = '\u{E262}'; // accidentalgSharp
+    pub const FLAT: char = '\u{E260}'; // accidentalgFlat
+    pub const NATURAL: char = '\u{E261}'; // accidentalgNatural
 }
 
 /// 将图标名映射为 SMuFL 码位序列（用于 #icon<name> 渲染）
 /// 附点音符返回两个字符：[音符，附点]
 pub fn icon_to_smufl(name: &str) -> Option<&'static [char]> {
     match name {
-        "note_1" | "whole"              => Some(&[metro::WHOLE]),
-        "note_2" | "half"               => Some(&[metro::HALF]),
-        "note_4" | "quarter"            => Some(&[metro::QUARTER]),
-        "note_8" | "eighth"             => Some(&[metro::EIGHTH]),
-        "note_16" | "sixteenth"         => Some(&[metro::SIXTEENTH]),
-        "note_32" | "thirtysecond"      => Some(&[metro::THIRTY_SECOND]),
-        "note_4d" | "dotted_quarter"    => Some(&[metro::QUARTER, metro::DOT]),
-        "note_8d" | "dotted_eighth"     => Some(&[metro::EIGHTH, metro::DOT]),
+        "note_1" | "whole" => Some(&[metro::WHOLE]),
+        "note_2" | "half" => Some(&[metro::HALF]),
+        "note_4" | "quarter" => Some(&[metro::QUARTER]),
+        "note_8" | "eighth" => Some(&[metro::EIGHTH]),
+        "note_16" | "sixteenth" => Some(&[metro::SIXTEENTH]),
+        "note_32" | "thirtysecond" => Some(&[metro::THIRTY_SECOND]),
+        "note_4d" | "dotted_quarter" => Some(&[metro::QUARTER, metro::DOT]),
+        "note_8d" | "dotted_eighth" => Some(&[metro::EIGHTH, metro::DOT]),
         "note_16d" | "dotted_sixteenth" => Some(&[metro::SIXTEENTH, metro::DOT]),
-        "note_2d" | "dotted_half"       => Some(&[metro::HALF, metro::DOT]),
-        "sharp"                         => Some(&[accidental::SHARP]),
-        "flat"                          => Some(&[accidental::FLAT]),
-        "natural" | "nat"               => Some(&[accidental::NATURAL]),
+        "note_2d" | "dotted_half" => Some(&[metro::HALF, metro::DOT]),
+        "sharp" => Some(&[accidental::SHARP]),
+        "flat" => Some(&[accidental::FLAT]),
+        "natural" | "nat" => Some(&[accidental::NATURAL]),
         _ => None,
     }
 }
@@ -205,15 +205,10 @@ impl CffFont {
         let units_per_em = face_ref.units_per_em();
         let scale = 1000.0 / units_per_em as f32;
         for ch in chars {
-            let entry = face_ref
-                .glyph_index(ch)
-                .map(|gid| {
-                    let advance = face_ref
-                        .glyph_hor_advance(gid)
-                        .unwrap_or(0) as f32
-                        * scale;
-                    (gid.0, advance)
-                });
+            let entry = face_ref.glyph_index(ch).map(|gid| {
+                let advance = face_ref.glyph_hor_advance(gid).unwrap_or(0) as f32 * scale;
+                (gid.0, advance)
+            });
             self.glyph_cache.insert(ch, entry);
         }
     }
@@ -225,15 +220,10 @@ impl CffFont {
         }
         let face_ref = self.face.as_face_ref();
         let scale = 1000.0 / face_ref.units_per_em() as f32;
-        let entry = face_ref
-            .glyph_index(ch)
-            .map(|gid| {
-                let advance = face_ref
-                    .glyph_hor_advance(gid)
-                    .unwrap_or(0) as f32
-                    * scale;
-                (gid.0, advance)
-            });
+        let entry = face_ref.glyph_index(ch).map(|gid| {
+            let advance = face_ref.glyph_hor_advance(gid).unwrap_or(0) as f32 * scale;
+            (gid.0, advance)
+        });
         self.glyph_cache.insert(ch, entry);
         entry
     }
@@ -254,12 +244,22 @@ impl CffFont {
     }
 
     /// 将字体嵌入 PDF（Identity-H + CIDFontType0 + FontFile3）。
-    pub fn embed(&self, pdf: &mut Pdf, next_ref: &mut i32, font_name: Name<'static>) -> EmbeddedFont {
-        let font_id = Ref::new(*next_ref); *next_ref += 1;
-        let cid_font_id = Ref::new(*next_ref); *next_ref += 1;
-        let descriptor_id = Ref::new(*next_ref); *next_ref += 1;
-        let cff_stream_id = Ref::new(*next_ref); *next_ref += 1;
-        let to_unicode_id = Ref::new(*next_ref); *next_ref += 1;
+    pub fn embed(
+        &self,
+        pdf: &mut Pdf,
+        next_ref: &mut i32,
+        font_name: Name<'static>,
+    ) -> EmbeddedFont {
+        let font_id = Ref::new(*next_ref);
+        *next_ref += 1;
+        let cid_font_id = Ref::new(*next_ref);
+        *next_ref += 1;
+        let descriptor_id = Ref::new(*next_ref);
+        *next_ref += 1;
+        let cff_stream_id = Ref::new(*next_ref);
+        *next_ref += 1;
+        let to_unicode_id = Ref::new(*next_ref);
+        *next_ref += 1;
 
         // 1. CFF 流
         pdf.stream(cff_stream_id, &self.cff_data)
@@ -333,7 +333,10 @@ impl CffFont {
         let cmap_buf = cmap.finish();
         pdf.stream(to_unicode_id, &cmap_buf);
 
-        EmbeddedFont { name: font_name, id: font_id }
+        EmbeddedFont {
+            name: font_name,
+            id: font_id,
+        }
     }
 }
 
@@ -343,9 +346,9 @@ impl CffFont {
 
 pub struct FontFamily {
     pub leland: Option<(CffFont, EmbeddedFont)>,
-    pub latin_bold: Option<(CffFont, EmbeddedFont)>,   // Source Serif Pro Bold（音符数字）
-    pub latin: Option<(CffFont, EmbeddedFont)>,        // Source Serif Pro Regular（西文）
-    pub cjk: Option<(CffFont, EmbeddedFont)>,          // Source Han Serif SC（中文/非西文）
+    pub latin_bold: Option<(CffFont, EmbeddedFont)>, // Source Serif Pro Bold（音符数字）
+    pub latin: Option<(CffFont, EmbeddedFont)>,      // Source Serif Pro Regular（西文）
+    pub cjk: Option<(CffFont, EmbeddedFont)>,        // Source Han Serif SC（中文/非西文）
 }
 
 impl FontFamily {
@@ -372,17 +375,44 @@ impl FontFamily {
         if let Some(mut f) = find_and_load(font_dirs, "Leland.otf", 0) {
             f.set_symbolic(true);
             let smufl_chars = vec![
-                dynamics::PP, dynamics::P, dynamics::M, dynamics::F,
-                dynamics::R, dynamics::S, dynamics::Z, dynamics::N,
-                dynamics::MP, dynamics::MF, dynamics::PF, dynamics::FF,
-                dynamics::FFF, dynamics::FFFF, dynamics::FP, dynamics::FZ,
-                dynamics::SF, dynamics::SFP, dynamics::SFPP, dynamics::SFZ,
-                dynamics::SFZP, dynamics::SFFZ, dynamics::RF, dynamics::RFZ,
+                dynamics::PP,
+                dynamics::P,
+                dynamics::M,
+                dynamics::F,
+                dynamics::R,
+                dynamics::S,
+                dynamics::Z,
+                dynamics::N,
+                dynamics::MP,
+                dynamics::MF,
+                dynamics::PF,
+                dynamics::FF,
+                dynamics::FFF,
+                dynamics::FFFF,
+                dynamics::FP,
+                dynamics::FZ,
+                dynamics::SF,
+                dynamics::SFP,
+                dynamics::SFPP,
+                dynamics::SFZ,
+                dynamics::SFZP,
+                dynamics::SFFZ,
+                dynamics::RF,
+                dynamics::RFZ,
                 REPEAT_DOT,
-                metro::WHOLE, metro::HALF, metro::QUARTER, metro::EIGHTH,
-                metro::SIXTEENTH, metro::THIRTY_SECOND, metro::DOT,
-                accidental::SHARP, accidental::FLAT, accidental::NATURAL,
-            ].into_iter().chain((0..=9u8).map(time_sig::digit));
+                metro::WHOLE,
+                metro::HALF,
+                metro::QUARTER,
+                metro::EIGHTH,
+                metro::SIXTEENTH,
+                metro::THIRTY_SECOND,
+                metro::DOT,
+                accidental::SHARP,
+                accidental::FLAT,
+                accidental::NATURAL,
+            ]
+            .into_iter()
+            .chain((0..=9u8).map(time_sig::digit));
             f.prewarm(smufl_chars);
             let em = f.embed(pdf, next_ref, Name(b"F2"));
             me.leland = Some((f, em));
@@ -391,7 +421,9 @@ impl FontFamily {
         // --- Source Serif Pro Bold（音符数字粗体） ---
         if let Some(mut f) = find_and_load(font_dirs, "SourceSerifPro-Bold.otf", 0) {
             let common: Vec<char> = "0123456789+-=()<>[]{}/,:;.".chars().collect();
-            let alpha: Vec<char> = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".chars().collect();
+            let alpha: Vec<char> = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                .chars()
+                .collect();
             f.prewarm(common.into_iter().chain(alpha).chain(extra_chars.chars()));
             let em = f.embed(pdf, next_ref, Name(b"F3"));
             me.latin_bold = Some((f, em));
@@ -463,5 +495,9 @@ pub enum CharClass {
 }
 
 pub fn char_class(c: char) -> CharClass {
-    if (c as u32) < 0x80 { CharClass::Ascii } else { CharClass::NonAscii }
+    if (c as u32) < 0x80 {
+        CharClass::Ascii
+    } else {
+        CharClass::NonAscii
+    }
 }

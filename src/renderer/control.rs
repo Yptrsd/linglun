@@ -4,13 +4,13 @@
 //! 收拢为 `ControlFunc` trait + 静态注册表。新增一个渲染型控制函数只需：
 //!   1. 实现 `ControlFunc`（按需覆写 `width`/`header_advance`/`prewarm_chars`/`render`）
 //!   2. 在 `REGISTRY` 切片加一行
-//! `pdf.rs` 的布局与渲染核心代码不再被改动。
+//!      `pdf.rs` 的布局与渲染核心代码不再被改动。
 
 use pdf_writer::{Content, Name};
 
-use crate::renderer::font::{dynamics_char, icon_to_smufl, time_sig, FontFamily};
+use crate::renderer::font::{FontFamily, dynamics_char, icon_to_smufl, time_sig};
 use crate::renderer::pdf::{
-    parse_timesig, render_mixed_text, render_tempo, show_glyph, NOTE_FONT_SIZE, NOTE_GLYPH_WIDTH,
+    NOTE_FONT_SIZE, NOTE_GLYPH_WIDTH, parse_timesig, render_mixed_text, render_tempo, show_glyph,
 };
 
 // ============================================
@@ -155,48 +155,48 @@ impl ControlFunc for TimesigFunc {
         // 分子在上、分母在下，整体垂直居中于音符视觉中心
         let y_top = y_base + NOTE_FONT_SIZE * 0.35;
         let y_bot = y_base - NOTE_FONT_SIZE * 0.25;
-        if let Some((num, den)) = parse_timesig(value) {
-            if let Some((f, em)) = &mut fonts.leland {
-                let num_ch = time_sig::digit(num);
-                let den_ch = time_sig::digit(den);
-                let (gid_n, _) = match f.glyph_entry(num_ch) {
-                    Some(g) => g,
-                    None => {
-                        render_mixed_text(content, value, x, y_base, size, fonts, fallback);
-                        return;
-                    }
-                };
-                let (gid_d, _) = match f.glyph_entry(den_ch) {
-                    Some(g) => g,
-                    None => {
-                        render_mixed_text(content, value, x, y_base, size, fonts, fallback);
-                        return;
-                    }
-                };
-                // 用两个数字 bbox x_max 的较大值作为分数线长度（与字符等宽）
-                let num_w = f
-                    .glyph_bbox(num_ch)
-                    .map(|(_, _, xm, _)| xm * size / 1000.0)
-                    .unwrap_or(size * 0.6);
-                let den_w = f
-                    .glyph_bbox(den_ch)
-                    .map(|(_, _, xm, _)| xm * size / 1000.0)
-                    .unwrap_or(size * 0.6);
-                let frac_width = num_w.max(den_w);
+        if let Some((num, den)) = parse_timesig(value)
+            && let Some((f, em)) = &mut fonts.leland
+        {
+            let num_ch = time_sig::digit(num);
+            let den_ch = time_sig::digit(den);
+            let (gid_n, _) = match f.glyph_entry(num_ch) {
+                Some(g) => g,
+                None => {
+                    render_mixed_text(content, value, x, y_base, size, fonts, fallback);
+                    return;
+                }
+            };
+            let (gid_d, _) = match f.glyph_entry(den_ch) {
+                Some(g) => g,
+                None => {
+                    render_mixed_text(content, value, x, y_base, size, fonts, fallback);
+                    return;
+                }
+            };
+            // 用两个数字 bbox x_max 的较大值作为分数线长度（与字符等宽）
+            let num_w = f
+                .glyph_bbox(num_ch)
+                .map(|(_, _, xm, _)| xm * size / 1000.0)
+                .unwrap_or(size * 0.6);
+            let den_w = f
+                .glyph_bbox(den_ch)
+                .map(|(_, _, xm, _)| xm * size / 1000.0)
+                .unwrap_or(size * 0.6);
+            let frac_width = num_w.max(den_w);
 
-                show_glyph(content, em.name, gid_n, x, y_top, size);
-                show_glyph(content, em.name, gid_d, x, y_bot, size);
+            show_glyph(content, em.name, gid_n, x, y_top, size);
+            show_glyph(content, em.name, gid_d, x, y_bot, size);
 
-                // 画分数线：与字符等宽
-                let y_frac = (y_top + y_bot) / 2.0;
-                content.save_state();
-                content.set_line_width(1.0);
-                content.move_to(x, y_frac);
-                content.line_to(x + frac_width, y_frac);
-                content.stroke();
-                content.restore_state();
-                return;
-            }
+            // 画分数线：与字符等宽
+            let y_frac = (y_top + y_bot) / 2.0;
+            content.save_state();
+            content.set_line_width(1.0);
+            content.move_to(x, y_frac);
+            content.line_to(x + frac_width, y_frac);
+            content.stroke();
+            content.restore_state();
+            return;
         }
         // 回退：混合文本
         render_mixed_text(content, value, x, y_base, size, fonts, fallback);
@@ -220,14 +220,13 @@ impl ControlFunc for DynamicsFunc {
         let y = y_base - DYNAMICS_Y_OFFSET;
         let size = NOTE_FONT_SIZE * 1.2;
         // 优先用 Leland SMuFL 力度记号
-        if let Some(ch) = dynamics_char(value) {
-            if let Some((f, em)) = &mut fonts.leland {
-                if let Some((gid, adv)) = f.glyph_entry(ch) {
-                    show_glyph(content, em.name, gid, x, y, size);
-                    let _ = adv;
-                    return;
-                }
-            }
+        if let Some(ch) = dynamics_char(value)
+            && let Some((f, em)) = &mut fonts.leland
+            && let Some((gid, adv)) = f.glyph_entry(ch)
+        {
+            show_glyph(content, em.name, gid, x, y, size);
+            let _ = adv;
+            return;
         }
         // 回退：混合文本
         render_mixed_text(content, value, x, y, size, fonts, fallback);
@@ -239,7 +238,7 @@ impl ControlFunc for DynamicsFunc {
 // ============================================
 
 /// 已注册的控制函数表（name → 实现）。新增函数在此加一行即可。
-static REGISTRY: &[(&'static str, &'static dyn ControlFunc)] = &[
+static REGISTRY: &[(&str, &dyn ControlFunc)] = &[
     ("key", &KeyFunc),
     ("tempo", &TempoFunc),
     ("timesig", &TimesigFunc),
@@ -248,10 +247,7 @@ static REGISTRY: &[(&'static str, &'static dyn ControlFunc)] = &[
 
 /// 按名字查找控制函数实现。
 pub(crate) fn lookup(name: &str) -> Option<&'static dyn ControlFunc> {
-    REGISTRY
-        .iter()
-        .find(|(n, _)| *n == name)
-        .map(|(_, f)| *f)
+    REGISTRY.iter().find(|(n, _)| *n == name).map(|(_, f)| *f)
 }
 
 /// 未知控制函数的兜底渲染：`name=value` 文本，位于音符上方（调号位置）。
