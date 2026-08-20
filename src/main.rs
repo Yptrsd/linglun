@@ -1,13 +1,15 @@
+mod daemon;
 mod diagnostics;
 mod parser;
 mod renderer;
 mod ui;
 
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use diagnostics::Diagnostics;
 use parser::parse_and_extract;
-use renderer::pdf::render_to_pdf;
+use renderer::pdf::{render_to_pdf, render_to_pdf_bytes};
 
 /// 默认输入乐谱路径
 const DEFAULT_INPUT: &str = "test/test.llpartition";
@@ -17,9 +19,18 @@ const DEFAULT_OUTPUT: &str = "test/test_output.pdf";
 /// 打印命令行用法
 fn print_usage() {
     println!("Usage: linglun <input.llpartition> [output.pdf] [--font-dir <目录>]");
-    println!("  -h, --help          Show this help");
-    println!("  -p, --parse [input] Print parse tree (default input: test/test.llpartition)");
-    println!("  --font-dir <dir>    字体目录（冒号分隔可多个）。也支持环境变量 LINGLUN_FONTS。");
+    println!();
+    println!("Modes:");
+    println!("  (default)            从文件读取乐谱，生成 PDF 文件");
+    println!(
+        "  --stdin              从 stdin 读取乐谱，PDF 写到 stdout（二进制），诊断写到 stderr"
+    );
+    println!("  --daemon             启动常驻后台进程，通过 stdin/stdout JSON 协议通信");
+    println!();
+    println!("Options:");
+    println!("  -h, --help           Show this help");
+    println!("  -p, --parse [input]  Print parse tree (default input: test/test.llpartition)");
+    println!("  --font-dir <dir>     字体目录（冒号分隔可多个）。也支持环境变量 LINGLUN_FONTS。");
 }
 
 /// 由输入乐谱路径推断默认输出路径（同目录、同名、扩展名换 .pdf）
@@ -48,33 +59,72 @@ fn print_parse_tree(args: &[String]) {
     parser::print_parsed_events(&score);
 }
 
-fn main() {
-    let args: Vec<String> = std::env::args().collect();
-
-    // 打印解析树模式：-p / --parse [input]
-    if args.len() >= 2 && (args[1] == "-p" || args[1] == "--parse") {
-        print_parse_tree(&args);
-        return;
+/// --stdin 模式：从 stdin 读取源码，PDF 二进制写到 stdout，诊断写到 stderr。
+/// 编辑器可通过管道调用：`cat file.llpartition | linglun --stdin > output.pdf`
+fn run_stdin(font_dirs: &[Option<PathBuf>]) {
+    let mut source = String::new();
+    if let Err(e) = std::io::stdin().read_to_string(&mut source) {
+        ui::fatal(&format!("读取 stdin 失败: {}", e));
     }
 
-    // 收集 --font-dir 目录列表（CLI 优先于环境变量 LINGLUN_FONTS）
-    let mut font_dirs: Vec<Option<PathBuf>> = Vec::new();
+    let mut diag = Diagnostics::new();
+    let events = parse_and_extract(&source, &mut diag);
+    if diag.has_error() {
+        diag.report();
+        ui::fatal_bare("中止：解析存在错误（详情见上方）");
+    }
+
+    match render_to_pdf_bytes(&events, font_dirs, &mut diag) {
+        Some(pdf_bytes) => {
+            // PDF 二进制直接写到 stdout
+            let mut stdout = std::io::stdout();
+            if let Err(e) = std::io::Write::write_all(&mut stdout, &pdf_bytes) {
+                diag.error(format!("写入 stdout 失败: {}", e));
+            }
+        }
+        None => {}
+    }
+    // 诊断（警告）写到 stderr
+    diag.report();
+    if diag.has_error() {
+        ui::fatal_bare("中止：渲染存在错误（详情见上方）");
+    }
+}
+
+/// 收集 --font-dir 环境变量中的目录
+fn collect_env_font_dirs() -> Vec<Option<PathBuf>> {
+    let mut dirs = Vec::new();
     for dir in std::env::var("LINGLUN_FONTS")
         .ok()
         .into_iter()
         .flat_map(|s| s.split(':').map(str::to_string).collect::<Vec<_>>())
     {
         if !dir.is_empty() {
-            font_dirs.push(Some(PathBuf::from(dir)));
+            dirs.push(Some(PathBuf::from(dir)));
         }
     }
+    dirs
+}
+
+/// 解析命令行参数，返回 (font_dirs, positional_args, daemon_mode, stdin_mode)
+fn parse_args(args: &[String]) -> (Vec<Option<PathBuf>>, Vec<String>, bool, bool) {
+    let mut font_dirs = collect_env_font_dirs();
     let mut positional: Vec<String> = Vec::new();
+    let mut daemon_mode = false;
+    let mut stdin_mode = false;
+
     let mut i = 1;
     while i < args.len() {
         let a = &args[i];
         if a == "-h" || a == "--help" {
             print_usage();
-            return;
+            std::process::exit(0);
+        } else if a == "--daemon" {
+            daemon_mode = true;
+            i += 1;
+        } else if a == "--stdin" {
+            stdin_mode = true;
+            i += 1;
         } else if a == "--font-dir" {
             if i + 1 < args.len() {
                 for dir in args[i + 1].split(':') {
@@ -99,7 +149,33 @@ fn main() {
         }
     }
 
-    // 解析位置参数：<input> [output]，缺省时使用默认测试路径
+    (font_dirs, positional, daemon_mode, stdin_mode)
+}
+
+fn main() {
+    let args: Vec<String> = std::env::args().collect();
+
+    // 打印解析树模式：-p / --parse [input]
+    if args.len() >= 2 && (args[1] == "-p" || args[1] == "--parse") {
+        print_parse_tree(&args);
+        return;
+    }
+
+    let (font_dirs, positional, daemon_mode, stdin_mode) = parse_args(&args);
+
+    // --daemon 模式：启动常驻后台进程
+    if daemon_mode {
+        daemon::run_daemon();
+        return;
+    }
+
+    // --stdin 模式：从 stdin 读取源码，PDF 写到 stdout
+    if stdin_mode {
+        run_stdin(&font_dirs);
+        return;
+    }
+
+    // 常规模式：从文件读取乐谱
     let (input_path, output_path) = match positional.len() {
         0 => (DEFAULT_INPUT.to_string(), DEFAULT_OUTPUT.to_string()),
         1 => (positional[0].clone(), default_output(&positional[0])),

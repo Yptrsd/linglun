@@ -107,6 +107,25 @@ pub fn render_to_pdf(
     font_dirs: &[Option<std::path::PathBuf>],
     diag: &mut crate::diagnostics::Diagnostics,
 ) {
+    match render_to_pdf_bytes(events, font_dirs, diag) {
+        Some(buf) => {
+            if let Err(e) = std::fs::write(output_path, buf) {
+                diag.error(format!("写入 PDF 失败：{}", e));
+            }
+        }
+        None => {}
+    }
+}
+
+/// 将乐谱事件渲染为 PDF 字节流（不写文件）。
+/// `font_dirs`：可选的字体查找目录。
+/// 错误与警告记录到 `diag`；若存在致命错误（无事件、字体全部缺失等）返回 `None`，
+/// 否则返回 `Some(pdf_bytes)`。
+pub fn render_to_pdf_bytes(
+    events: &[ScoreEvent],
+    font_dirs: &[Option<std::path::PathBuf>],
+    diag: &mut crate::diagnostics::Diagnostics,
+) -> Option<Vec<u8>> {
     // 提取页面元数据（#title/#subtitle/#credit），不参与音符行内布局
     let (meta, note_events) = extract_page_meta(events);
     let title_area = title_area_height(&meta);
@@ -114,7 +133,7 @@ pub fn render_to_pdf(
     let lines = layout_lines(&note_events);
     if lines.is_empty() {
         diag.error("没有可渲染的事件");
-        return;
+        return None;
     }
 
     let mut pdf = Pdf::new();
@@ -277,10 +296,7 @@ pub fn render_to_pdf(
         .kids(page_refs.iter().copied())
         .count(page_refs.len() as i32);
 
-    let buf = pdf.finish();
-    if let Err(e) = std::fs::write(output_path, buf) {
-        diag.error(format!("写入 PDF 失败：{}", e));
-    }
+    Some(pdf.finish())
 }
 
 // ============================================

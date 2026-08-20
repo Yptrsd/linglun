@@ -13,3 +13,8 @@ pdf-writer = "0.14.0"
 
 # 字体支持
 owned_ttf_parser = "0.25.0"
+
+# daemon 模式依赖
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"

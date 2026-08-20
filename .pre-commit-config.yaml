@@ -17,9 +17,10 @@ repos:
         args: [--all]
         pass_filenames: false
 
-  # 4. Rust 基础检查 (cargo check) - 快速验证能否编译
+  # 3. 本地钩子
   - repo: local
     hooks:
+      # Rust 基础检查 (cargo check) - 快速验证能否编译
       - id: cargo-check
         name: cargo check
         entry: cargo check --all-targets --all-features
@@ -27,4 +28,14 @@ repos:
         types: [rust]
         pass_filenames: false
         always_run: true
+        stages: [pre-commit]
+
+      # 自动生成第三方依赖许可证声明（THIRD-PARTY-NOTICES.md）
+      - id: third-party-notices
+        name: update THIRD-PARTY-NOTICES.md
+        entry: bash -c 'cargo-about generate about.hbs > THIRD-PARTY-NOTICES.md && perl -0pi -e "s/\\n+\\z/\\n/" THIRD-PARTY-NOTICES.md'
+        language: system
+        files: (Cargo\.toml|Cargo\.lock)
+        pass_filenames: false
+        always_run: false
         stages: [pre-commit]

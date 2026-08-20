@@ -48,6 +48,61 @@ linglun -p input.llpartition
 linglun --parse input.llpartition
 ```
 
+### 编辑器集成
+
+伶伦提供两种模式，方便编辑器实现**实时预览**：
+
+#### `--stdin` 模式（管道调用）
+
+从 stdin 读取乐谱源码，PDF 二进制写到 stdout，诊断信息写到 stderr。
+
+```bash
+# 编辑器保存文件时执行：
+cat input.llpartition | linglun --stdin > output.pdf
+
+# 也可以用管道直接传源码：
+echo '1 2 3 4 | 5 6 7 1^' | linglun --stdin > output.pdf
+
+# 指定字体目录：
+linglun --stdin --font-dir /path/to/fonts < input.llpartition > output.pdf
+```
+
+> **适用场景**：简单的保存触发预览。每次调用都会重新加载字体（约 50-100ms），但简谱文件本身很小，整体延迟可接受。
+
+#### `--daemon` 模式（常驻后台进程）
+
+启动一个常驻后台进程，字体只在首次编译时加载，后续请求复用缓存，显著降低延迟。通过 stdin/stdout 进行换行分隔的 JSON 通信。
+
+**协议格式：**
+
+```jsonc
+// 编辑器 → daemon：发送源码
+{"method":"compile","source":"1 2 3 4 |","font_dirs":["/path/to/fonts"]}
+
+// daemon → 编辑器：返回编译结果
+{"ok":true,"pdf":"JVBERi0xLjQK...","errors":[],"warnings":[]}
+
+// 编辑器 → daemon：关闭进程
+{"method":"shutdown"}
+```
+
+**响应字段：**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `ok` | bool | 编译是否成功 |
+| `pdf` | string? | Base64 编码的 PDF 字节流（失败时为 null） |
+| `errors` | array | 错误列表，每项含 `line`、`col`、`message` |
+| `warnings` | array | 警告列表（字符串） |
+
+**启动 daemon：**
+
+```bash
+linglun --daemon --font-dir /path/to/fonts
+```
+
+> **适用场景**：编辑器插件启动时拉起 daemon 进程，每次文本变更时发送 `compile` 请求，获得实时 PDF 预览。字体加载开销只在首次请求时产生，后续编译延迟极低。
+
 ## 乐谱语法
 
 伶伦使用自定义的 `.llpartition` 文本格式。基本语法：
@@ -98,7 +153,8 @@ linglun --parse input.llpartition
 ```
 linglun/
 ├── src/
-│   ├── main.rs              入口：CLI 参数解析、流程编排
+│   ├── main.rs              入口：CLI 参数解析、流程编排（支持 --stdin / --daemon）
+│   ├── daemon.rs            常驻后台进程：JSON 协议通信、字体缓存
 │   ├── parser/
 │   │   ├── mod.rs           解析器：Pest 文法 + AST 定义
 │   │   └── score.pest       PEG 文法规则
@@ -106,7 +162,7 @@ linglun/
 │   │   ├── mod.rs           渲染模块入口
 │   │   ├── font.rs          字体加载、SMuFL 映射、PDF 嵌入
 │   │   ├── control.rs       控制指令注册表与渲染
-│   │   └── pdf.rs           PDF 布局引擎与渲染核心
+│   │   └── pdf.rs           PDF 布局引擎与渲染核心（含 render_to_pdf_bytes）
 │   ├── ui.rs                终端输出样式（彩色提示）
 │   └── diagnostics.rs       统一错误/警告收集与报告
 ├── test/
@@ -163,6 +219,7 @@ pre-commit install
 | `check-added-large-files` | pre-commit-hooks | 阻止提交过大的文件 |
 | `fmt` | pre-commit-rust | `cargo fmt` 自动格式化 Rust 代码 |
 | `cargo-check` | local | `cargo check --all-targets --all-features` 快速编译检查 |
+| `third-party-notices` | local | 当 `Cargo.toml` / `Cargo.lock` 变更时，自动重新生成 `THIRD-PARTY-NOTICES.md` |
 
 #### 日常使用
 
